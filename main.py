@@ -1,3 +1,6 @@
+# main.py (복사 버튼 지원 HTML 박스 포함 출력용)
+# ✅ 흐름 일치 + 흐름 반전 + 블럭 기반 통합 예측 구조
+
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import requests
@@ -72,6 +75,10 @@ def detect_reverse_pattern_match(data, recent_flow):
             reverse_scores[next_value] += 1
     return reverse_scores
 
+def get_most_common_flow_item(data):
+    last = convert(data[-1])
+    return parse_block(last)
+
 @app.route("/")
 def home():
     return send_file("index.html")
@@ -98,11 +105,18 @@ def predict():
 
         recent_flow = detect_recent_flow(data, 20)
         reverse_boost = detect_reverse_pattern_match(data, recent_flow)
+        flow_start, flow_line, flow_oe = get_most_common_flow_item(data)
 
         scored_items = []
         for name, info in scores.items():
-            flow_bonus = reverse_boost.get(name, 0) * 2  # 반전패턴 보정 가중치
-            adjusted_score = round((info["score"] + flow_bonus) * (1 - instability * 0.5), 2)
+            s, c, o = parse_block(name)
+            match_score = 0
+            if s == flow_start: match_score += 1
+            if int(c) == int(flow_line): match_score += 1
+            if o == flow_oe: match_score += 1
+            flow_match_bonus = match_score * 1.0
+            reverse_bonus = reverse_boost.get(name, 0) * 2
+            adjusted_score = round((info["score"] + reverse_bonus + flow_match_bonus) * (1 - instability * 0.5), 2)
             scored_items.append((name, adjusted_score, info["detail"]))
 
         seen = set()
