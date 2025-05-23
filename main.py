@@ -2,7 +2,7 @@ from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import requests
 import os
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 app = Flask(__name__)
 CORS(app)
@@ -28,6 +28,16 @@ def generate_variants_for_block(block):
         variants["대칭둘다"].append(f"{flip_start(s)}{c}{flip_oe(o)}")
     return variants
 
+def analyze_flow(data):
+    flow = {"시작방향": [], "줄수": [], "홀짝": []}
+    for d in data[-5:]:
+        s, c, o = parse_block(convert(d))
+        flow["시작방향"].append(s)
+        flow["줄수"].append(int(c))
+        flow["홀짝"].append(o)
+    불안정도 = sum(1 for i in range(4) if flow["줄수"][i] != flow["줄수"][i+1]) / 4
+    return {**flow, "불안정도": round(불안정도, 2)}
+
 def score_blocks(data, size, reverse=False):
     if reverse:
         data = list(reversed(data))
@@ -49,15 +59,18 @@ def score_blocks(data, size, reverse=False):
                 scores[target]["detail"][key] += 1
     return scores
 
-def analyze_flow(data):
-    flow = {"시작방향": [], "줄수": [], "홀짝": []}
-    for d in data[-5:]:
-        s, c, o = parse_block(convert(d))
-        flow["시작방향"].append(s)
-        flow["줄수"].append(int(c))
-        flow["홀짝"].append(o)
-    불안정도 = sum(1 for i in range(4) if flow["줄수"][i] != flow["줄수"][i+1]) / 4
-    return {**flow, "불안정도": round(불안정도, 2)}
+def detect_recent_flow(data, n=20):
+    return [convert(d) for d in data[-n:]]
+
+def detect_reverse_pattern_match(data, recent_flow):
+    all_data = [convert(d) for d in data]
+    reverse_scores = defaultdict(int)
+    length = len(recent_flow)
+    for i in range(len(all_data) - length - 1):
+        if all_data[i:i+length] == recent_flow:
+            next_value = all_data[i+length]
+            reverse_scores[next_value] += 1
+    return reverse_scores
 
 @app.route("/")
 def home():
@@ -83,9 +96,13 @@ def predict():
                     for dkey, dval in v["detail"].items():
                         scores[k]["detail"][dkey] += dval
 
+        recent_flow = detect_recent_flow(data, 20)
+        reverse_boost = detect_reverse_pattern_match(data, recent_flow)
+
         scored_items = []
         for name, info in scores.items():
-            adjusted_score = round(info["score"] * (1 - instability * 0.5), 2)  # 감점 완화 적용
+            flow_bonus = reverse_boost.get(name, 0) * 2  # 반전패턴 보정 가중치
+            adjusted_score = round((info["score"] + flow_bonus) * (1 - instability * 0.5), 2)
             scored_items.append((name, adjusted_score, info["detail"]))
 
         seen = set()
