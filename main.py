@@ -89,7 +89,7 @@ def predict():
         url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
         raw = requests.get(url).json()
         data = raw[-288:]
-        round_num = int(raw[-1]['date_round']) + 1
+        round_num = int(raw[0]['date_round']) + 1
 
         flow_info = analyze_flow(data)
         instability = flow_info["불안정도"]
