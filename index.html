@@ -4,10 +4,27 @@
   <meta charset="UTF-8">
   <title>사다리 예측 결과 (Top5)</title>
   <style>
-    body { font-family: sans-serif; padding: 30px; background: #f4f4f4; }
-    .result-box { background: white; padding: 20px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
-    .score { font-weight: bold; color: #004488; }
-    .detail { font-size: 0.95em; color: #666; margin-top: 6px; }
+    body {
+      font-family: sans-serif;
+      padding: 30px;
+      background: #f4f4f4;
+    }
+    .result-box {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+    .score {
+      font-weight: bold;
+      color: #004488;
+    }
+    .detail {
+      font-size: 0.95em;
+      color: #666;
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -15,6 +32,7 @@
     <h2>예측 회차: <span id="round">불러오는 중...</span></h2>
     <ul id="topN"><li>불러오는 중...</li></ul>
   </div>
+
   <div class="result-box">
     <h3>흐름 해석</h3>
     <pre id="flow"></pre>
@@ -28,16 +46,16 @@ fetch("/predict")
     const ul = document.getElementById("topN");
     ul.innerHTML = "";
 
-    // Top5 출력 처리
     (data["Top5"] || []).forEach((item, i) => {
       const li = document.createElement("li");
       li.innerHTML = `<span class='score'>${i+1}위: ${item.값} (점수: ${item.점수})</span>`;
-      const detail = Object.entries(item.근거).map(([k,v])=>`- ${k}: ${v}회`).join("<br>");
-      li.innerHTML += `<div class='detail'>${detail}</div>`;
+      const detail = Object.entries(item.근거).map(([k,v]) => `- ${k}: ${v}회`).join("<br>");
+      if (detail) {
+        li.innerHTML += `<div class='detail'>${detail}</div>`;
+      }
       ul.appendChild(li);
     });
 
-    // 흐름 출력
     document.getElementById("flow").textContent = JSON.stringify(data["흐름해석"], null, 2);
   });
 </script>

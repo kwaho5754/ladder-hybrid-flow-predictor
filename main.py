@@ -74,7 +74,6 @@ def predict():
         flow_info = analyze_flow(data)
         instability = flow_info["불안정도"]
 
-        # 점수 누적
         scores = defaultdict(lambda: {"score": 0, "detail": defaultdict(int)})
         for size in range(3, 8):
             for reverse in [False, True]:
@@ -84,21 +83,22 @@ def predict():
                     for dkey, dval in v["detail"].items():
                         scores[k]["detail"][dkey] += dval
 
-        # 가중치 적용 점수 계산
         scored_items = []
         for name, info in scores.items():
-            adjusted_score = round(info["score"] * (1 - instability), 2)
+            adjusted_score = round(info["score"] * (1 - instability * 0.5), 2)  # 감점 완화 적용
             scored_items.append((name, adjusted_score, info["detail"]))
 
-        # 점수순 정렬 후 이름 중복 제거
         seen = set()
         top5 = []
         for name, adj_score, details in sorted(scored_items, key=lambda x: x[1], reverse=True):
-            if name not in seen:
+            if name not in seen and adj_score > 0:
                 top5.append({"값": name, "점수": adj_score, "근거": dict(details)})
                 seen.add(name)
             if len(top5) == 5:
                 break
+
+        if not top5:
+            top5 = [{"값": "❌ 예측 불가 (불안정도 최대)", "점수": 0, "근거": {}}]
 
         return jsonify({"예측회차": round_num, "Top5": top5, "흐름해석": flow_info})
     except Exception as e:
