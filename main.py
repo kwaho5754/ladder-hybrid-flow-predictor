@@ -1,6 +1,3 @@
-# ⬇️ main.py — 하이브리드 예측 시스템
-# 정방향 + 역방향 점수제 통합 + 흐름 분석 포함
-
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import requests
@@ -74,6 +71,10 @@ def predict():
         data = raw[-288:]
         round_num = int(raw[-1]['date_round']) + 1
 
+        flow_info = analyze_flow(data)
+        instability = flow_info["불안정도"]
+
+        # 점수 누적
         scores = defaultdict(lambda: {"score": 0, "detail": defaultdict(int)})
         for size in range(3, 8):
             for reverse in [False, True]:
@@ -83,17 +84,23 @@ def predict():
                     for dkey, dval in v["detail"].items():
                         scores[k]["detail"][dkey] += dval
 
-        sorted_result = sorted(scores.items(), key=lambda x: x[1]['score'], reverse=True)
-        top3 = []
-        for i in range(3):
-            if i < len(sorted_result):
-                name, info = sorted_result[i]
-                top3.append({"값": name, "점수": info["score"], "근거": dict(info["detail"])})
-            else:
-                top3.append({"값": "❌ 없음", "점수": 0, "근거": {}})
-        flow_info = analyze_flow(data)
+        # 가중치 적용 점수 계산
+        scored_items = []
+        for name, info in scores.items():
+            adjusted_score = round(info["score"] * (1 - instability), 2)
+            scored_items.append((name, adjusted_score, info["detail"]))
 
-        return jsonify({"예측회차": round_num, "Top3": top3, "흐름해석": flow_info})
+        # 점수순 정렬 후 이름 중복 제거
+        seen = set()
+        top5 = []
+        for name, adj_score, details in sorted(scored_items, key=lambda x: x[1], reverse=True):
+            if name not in seen:
+                top5.append({"값": name, "점수": adj_score, "근거": dict(details)})
+                seen.add(name)
+            if len(top5) == 5:
+                break
+
+        return jsonify({"예측회차": round_num, "Top5": top5, "흐름해석": flow_info})
     except Exception as e:
         return jsonify({"error": str(e)})
 
