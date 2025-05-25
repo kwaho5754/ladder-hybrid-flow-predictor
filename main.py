@@ -1,4 +1,4 @@
-# ✅ main.py — 블럭 생성 방향 수정 (최근 → 과거 순서로 블럭 구성)
+# ✅ main.py — 사다리 3~6줄 블럭 예측 / 좌우 대칭 변환 포함 (정방향)
 
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
@@ -8,14 +8,27 @@ import os
 app = Flask(__name__)
 CORS(app)
 
+# 🔄 결과값 문자열 변환
+
 def convert(entry):
     side = '좌' if entry['start_point'] == 'LEFT' else '우'
     count = str(entry['line_count'])
     oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
     return f"{side}{count}{oe}"
 
+# 🔁 좌우 + 홀짝 반전 대칭 변환
+
 def flip(block):
-    return [("우" if b[0] == "좌" else "좌") + b[1:] for b in block]
+    result = []
+    for b in block:
+        s = b[0]            # '좌' 또는 '우'
+        c = b[1:-1]         # 줄 수 (예: '3')
+        o = b[-1]           # '홀' 또는 '짝'
+        flipped = ('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀')
+        result.append(flipped)
+    return result
+
+# 🔍 매칭된 블럭의 상단값 추출
 
 def find_prediction(block, all_blocks):
     for i in range(len(all_blocks) - len(block)):
@@ -40,9 +53,9 @@ def predict():
 
         results = {}
         for size in range(3, 7):
-            # 🔁 블럭을 최근 → 과거 순서로 생성
+            # 🔁 블럭 생성: 최근 → 과거 방향
             recent_block = [convert(d) for d in data[-size:]][::-1]
-            flipped_block = flip(recent_block)
+            flipped_block = flip(recent_block)[::-1]
 
             original = find_prediction(recent_block, all_blocks)
             flipped = find_prediction(flipped_block, all_blocks)
