@@ -1,4 +1,4 @@
-# ✅ main.py — 3~6줄 블럭 / 원본 + 대칭 예측 시스템
+# ✅ main.py — 블럭 생성 방향 수정 (최근 → 과거 순서로 블럭 구성)
 
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
@@ -40,7 +40,8 @@ def predict():
 
         results = {}
         for size in range(3, 7):
-            recent_block = [convert(d) for d in data[-size:]]
+            # 🔁 블럭을 최근 → 과거 순서로 생성
+            recent_block = [convert(d) for d in data[-size:]][::-1]
             flipped_block = flip(recent_block)
 
             original = find_prediction(recent_block, all_blocks)
