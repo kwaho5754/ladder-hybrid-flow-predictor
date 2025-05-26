@@ -1,13 +1,57 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 import pandas as pd
+import requests
 import os
+import threading
+import time
 
 app = Flask(__name__)
 CORS(app)
 
 CSV_PATH = "ladder_results.csv"
+URL = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
 
+# ✅ 실시간 결과 수집 및 CSV 저장
+def fetch_and_save():
+    try:
+        raw = requests.get(URL).json()
+        if not raw:
+            print("❌ 실시간 데이터 없음")
+            return
+
+        latest = raw[0]
+        latest_round = int(latest["date_round"])
+
+        new_row = {
+            "회차": latest_round,
+            "start_point": latest["start_point"],
+            "line_count": latest["line_count"],
+            "odd_even": latest["odd_even"]
+        }
+
+        if os.path.exists(CSV_PATH):
+            df = pd.read_csv(CSV_PATH)
+            if latest_round in df["회차"].values:
+                print(f"✅ 이미 저장됨: {latest_round}회차")
+                return
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+        else:
+            df = pd.DataFrame([new_row])
+
+        df.to_csv(CSV_PATH, index=False)
+        print(f"✅ 저장 완료: {latest_round}회차")
+
+    except Exception as e:
+        print("❌ 저장 중 오류:", e)
+
+# ✅ 5분마다 저장 반복 실행 (서버 시작 시 자동)
+def run_collector_loop():
+    while True:
+        fetch_and_save()
+        time.sleep(300)
+
+# ✅ 블럭 변환
 def convert(row):
     side = '좌' if row['start_point'] == 'LEFT' else '우'
     count = str(row['line_count'])
@@ -67,7 +111,7 @@ def predict():
         size = int(mode[0])
         round_num = int(df.iloc[-1]["회차"]) + 1
 
-        data = df.tail(288).iloc[::-1]  # 최신값이 위에 오도록 정렬
+        data = df.tail(288).iloc[::-1]  # 최신값이 위로 오도록 정렬
         flow_list = [convert(row) for _, row in data.iterrows()]
         recent_flow = flow_list[:size]
 
@@ -93,5 +137,8 @@ def predict():
         return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
+    # ✅ 수집 루프 스레드로 시작
+    threading.Thread(target=run_collector_loop, daemon=True).start()
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
