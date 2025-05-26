@@ -1,44 +1,97 @@
-# ✅ main.py 전체
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
 import pandas as pd
 import os
 
 app = Flask(__name__)
+CORS(app)
 
 CSV_PATH = "ladder_results.csv"
 
-def load_csv():
-    if os.path.exists(CSV_PATH):
-        df = pd.read_csv(CSV_PATH)
-        if len(df) >= 100:  # 최소 100줄 이상일 때만 분석
-            return df
-    return None
+def convert(row):
+    side = '좌' if row['start_point'] == 'LEFT' else '우'
+    count = str(row['line_count'])
+    oe = '짝' if row['odd_even'] == 'EVEN' else '홀'
+    return f"{side}{count}{oe}"
 
-def predict_from_csv(df):
-    # 예시 예측 로직 (가장 많이 나온 값 기준)
-    last_500 = df.tail(500)
-    predictions = last_500['결과'].value_counts().head(3).to_dict()
-    return predictions
+def parse_block(s):
+    return s[0], s[1:-1], s[-1]
+
+def flip_full(block):
+    return [
+        ('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀')
+        for s, c, o in map(parse_block, block)
+    ]
+
+def flip_start(block):
+    flipped = []
+    for s, c, o in map(parse_block, block):
+        c_flip = '4' if c == '3' else '3'
+        o_flip = '홀' if o == '짝' else '짝'
+        flipped.append(s + c_flip + o_flip)
+    return flipped
+
+def flip_odd_even(block):
+    flipped = []
+    for s, c, o in map(parse_block, block):
+        s_flip = '우' if s == '좌' else '좌'
+        c_flip = '4' if c == '3' else '3'
+        flipped.append(s_flip + c_flip + o)
+    return flipped
+
+def find_flow_match(block, full_data):
+    block_len = len(block)
+    for i in reversed(range(len(full_data) - block_len)):
+        candidate = full_data[i:i+block_len]
+        if candidate == block:
+            pred_index = i - 1
+            pred = full_data[pred_index] if pred_index >= 0 else "❌ 없음"
+            return pred, ">".join(block), i + 1
+    return "❌ 없음", ">".join(block), -1
 
 @app.route("/")
-def index():
-    return send_from_directory(".", "index.html")
+def home():
+    return send_file("index.html")
 
 @app.route("/predict")
 def predict():
-    df = load_csv()
-    if df is None:
-        return jsonify({
-            "회차": "CSV 없음",
-            "예측": ["❌ 데이터 부족", "❌ 데이터 부족", "❌ 데이터 부족"]
-        })
-    predictions = predict_from_csv(df)
-    predict_round = df.iloc[-1]["회차"] + 1
-    top3 = list(predictions.keys()) + ["❌ 없음"] * (3 - len(predictions))
-    return jsonify({
-        "회차": int(predict_round),
-        "예측": top3[:3]
-    })
+    try:
+        if not os.path.exists(CSV_PATH):
+            return jsonify({"error": "CSV 파일 없음"})
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+        df = pd.read_csv(CSV_PATH)
+        if len(df) < 10:
+            return jsonify({"error": "CSV 데이터 부족"})
+
+        mode = request.args.get("mode", "3block_orig")
+        size = int(mode[0])
+        round_num = int(df.iloc[-1]["회차"]) + 1
+
+        data = df.tail(288).iloc[::-1]  # 최신값이 위에 오도록 정렬
+        flow_list = [convert(row) for _, row in data.iterrows()]
+        recent_flow = flow_list[:size]
+
+        if "flip_full" in mode:
+            flow = flip_full(recent_flow)
+        elif "flip_start" in mode:
+            flow = flip_start(recent_flow)
+        elif "flip_odd_even" in mode:
+            flow = flip_odd_even(recent_flow)
+        else:
+            flow = recent_flow
+
+        result, blk, match_index = find_flow_match(flow, flow_list)
+
+        return jsonify({
+            "예측회차": round_num,
+            "예측값": result,
+            "블럭": blk,
+            "매칭순번": match_index if match_index > 0 else "❌ 없음"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
