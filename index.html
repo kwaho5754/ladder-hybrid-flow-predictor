@@ -1,44 +1,43 @@
+<!-- ✅ index.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>사다리 예측 시스템</title>
+  <title>사다리 예측 결과</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
-    h1 { font-size: 24px; }
-    .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    .key { font-weight: bold; margin-top: 10px; }
+    body { font-family: sans-serif; padding: 2em; background: #f9f9f9; }
+    .card { background: #fff; padding: 1em; margin: 1em 0; border-radius: 8px; box-shadow: 0 0 5px #ccc; }
+    .card h2 { margin: 0 0 10px; }
   </style>
 </head>
 <body>
-  <h1>🔮 실시간 사다리 예측 결과</h1>
-  <div id="result">⏳ 불러오는 중...</div>
+  <h1>🔮 사다리 예측 결과</h1>
+  <div class="card" id="prediction-box">
+    <h2>예측 회차: <span id="round">...</span></h2>
+    <p>Top3 예측 결과:</p>
+    <ol id="results">
+      <li>...</li>
+      <li>...</li>
+      <li>...</li>
+    </ol>
+  </div>
 
   <script>
-    async function loadPrediction() {
-      try {
-        const res = await fetch("/predict");
-        const data = await res.json();
-        const container = document.getElementById("result");
-        container.innerHTML = `<div class='card'><b>예측 회차:</b> ${data['예측회차']}회</div>`;
-
-        for (const [key, val] of Object.entries(data)) {
-          if (key === "예측회차") continue;
-          container.innerHTML += `
-            <div class='card'>
-              <div class='key'>${key}</div>
-              <div>예측값: <b>${val['예측값']}</b></div>
-              <div>블럭: ${val['블럭'].map(v => `${v.start}${v.line}${v.odd_even}`).join(" > ")}</div>
-              <div>매칭순번: ${val['매칭순번']}</div>
-            </div>`;
-        }
-      } catch (e) {
-        document.getElementById("result").innerHTML = "❌ 예측 정보를 불러오지 못했습니다.";
-      }
-    }
-
-    loadPrediction();
-    setInterval(loadPrediction, 60000); // 1분마다 자동 새로고침
+    fetch("/predict")
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("round").innerText = data["회차"];
+        const resultList = document.getElementById("results");
+        resultList.innerHTML = "";
+        data["예측"].forEach(val => {
+          const li = document.createElement("li");
+          li.textContent = val;
+          resultList.appendChild(li);
+        });
+      })
+      .catch(err => {
+        document.getElementById("results").innerHTML = "<li>❌ 네트워크 오류</li>";
+      });
   </script>
 </body>
 </html>
