@@ -4,6 +4,7 @@ import requests
 import os
 import threading
 import time
+from waitress import serve
 
 app = Flask(__name__)
 CSV_FILE = "ladder_results.csv"
@@ -11,7 +12,6 @@ FETCH_URL = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
 CHECK_INTERVAL = 60  # 60초 간격으로 새 회차 확인
 
 # ✅ 자동 저장 루프
-
 def auto_fetch_loop():
     while True:
         try:
@@ -117,4 +117,4 @@ def predict():
 
 if __name__ == "__main__":
     threading.Thread(target=auto_fetch_loop, daemon=True).start()
-    app.run(host="0.0.0.0", port=5000)
+    serve(app, host="0.0.0.0", port=5000)
