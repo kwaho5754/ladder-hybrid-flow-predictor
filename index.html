@@ -1,129 +1,44 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>사다리 블럭 예측 결과</title>
+  <meta charset="UTF-8" />
+  <title>사다리 예측 시스템</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 2rem;
-      background-color: #f3f6fa;
-    }
-    h1 {
-      margin-bottom: 1rem;
-    }
-    h2 {
-      margin: 1.5rem 0 0.5rem;
-      font-size: 1.2rem;
-    }
-    .group {
-      margin-bottom: 2rem;
-    }
-    .cards {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 1rem;
-      box-shadow: 0 0 6px rgba(0,0,0,0.1);
-      width: 230px;
-    }
-    .card h3 {
-      margin: 0 0 0.5rem 0;
-      font-size: 1rem;
-    }
-    .value {
-      font-size: 1.4rem;
-      font-weight: bold;
-      margin-bottom: 0.5rem;
-    }
-    .note {
-      font-size: 0.85rem;
-      color: #555;
-    }
-    .none {
-      color: #ccc;
-    }
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    h1 { font-size: 24px; }
+    .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .key { font-weight: bold; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h1>예측 회차: <span id="round">로딩 중...</span></h1>
-  <div id="container"></div>
+  <h1>🔮 실시간 사다리 예측 결과</h1>
+  <div id="result">⏳ 불러오는 중...</div>
 
   <script>
-    const modeTitles = {
-      "3block": "3줄 블럭",
-      "4block": "4줄 블럭",
-      "5block": "5줄 블럭",
-      "6block": "6줄 블럭"
-    };
+    async function loadPrediction() {
+      try {
+        const res = await fetch("/predict");
+        const data = await res.json();
+        const container = document.getElementById("result");
+        container.innerHTML = `<div class='card'><b>예측 회차:</b> ${data['예측회차']}회</div>`;
 
-    const transformLabel = {
-      "orig": "원본",
-      "flip_start": "시작점 고정",
-      "flip_odd_even": "홀짝 고정",
-      "flip_full": "풀 대칭"
-    };
+        for (const [key, val] of Object.entries(data)) {
+          if (key === "예측회차") continue;
+          container.innerHTML += `
+            <div class='card'>
+              <div class='key'>${key}</div>
+              <div>예측값: <b>${val['예측값']}</b></div>
+              <div>블럭: ${val['블럭'].map(v => `${v.start}${v.line}${v.odd_even}`).join(" > ")}</div>
+              <div>매칭순번: ${val['매칭순번']}</div>
+            </div>`;
+        }
+      } catch (e) {
+        document.getElementById("result").innerHTML = "❌ 예측 정보를 불러오지 못했습니다.";
+      }
+    }
 
-    fetch("/predict")
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("round").textContent = data["예측회차"];
-        const container = document.getElementById("container");
-        const grouped = {};
-
-        Object.keys(data).forEach(key => {
-          if (key === "예측회차") return;
-          const [group, type] = key.split("_");
-          if (!grouped[group]) grouped[group] = [];
-          grouped[group].push({ type, ...data[key] });
-        });
-
-        Object.entries(grouped).forEach(([group, items]) => {
-          const div = document.createElement("div");
-          div.className = "group";
-
-          const h2 = document.createElement("h2");
-          h2.textContent = modeTitles[group];
-          div.appendChild(h2);
-
-          const cards = document.createElement("div");
-          cards.className = "cards";
-
-          items.forEach(entry => {
-            const card = document.createElement("div");
-            card.className = "card";
-
-            const title = document.createElement("h3");
-            title.textContent = transformLabel[entry.type] || entry.type;
-            card.appendChild(title);
-
-            const val = document.createElement("div");
-            val.className = "value";
-            val.textContent = entry["예측값"];
-            if (entry["예측값"].includes("없음")) val.classList.add("none");
-            card.appendChild(val);
-
-            const blk = document.createElement("div");
-            blk.className = "note";
-            blk.textContent = `블럭: ${entry["블럭"]}`;
-            card.appendChild(blk);
-
-            const idx = document.createElement("div");
-            idx.className = "note";
-            idx.textContent = `매칭순번: ${entry["매칭순번"]}`;
-            card.appendChild(idx);
-
-            cards.appendChild(card);
-          });
-
-          div.appendChild(cards);
-          container.appendChild(div);
-        });
-      });
+    loadPrediction();
+    setInterval(loadPrediction, 60000); // 1분마다 자동 새로고침
   </script>
 </body>
 </html>
