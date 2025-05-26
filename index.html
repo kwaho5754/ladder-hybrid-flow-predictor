@@ -3,17 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <title>사다리 예측 결과 (3~6줄 / 원본 + 대칭)</title>
+  <!-- ✅ 기본 스타일 -->
   <style>
-    body { font-family: sans-serif; padding: 30px; background: #f0f0f0; }
-    table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow: hidden; }
-    th, td { padding: 14px; border-bottom: 1px solid #ddd; text-align: center; }
-    th { background: #004488; color: #fff; }
-    tr:nth-child(even) { background: #f9f9f9; }
-    .none { color: #999; }
+    body {
+      font-family: sans-serif;
+      padding: 30px;
+      background: #f0f0f0;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    th, td {
+      padding: 14px;
+      border-bottom: 1px solid #ddd;
+      text-align: center;
+    }
+    th {
+      background: #004488;
+      color: #fff;
+    }
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    .none {
+      color: #999;
+    }
   </style>
 </head>
 <body>
+  <!-- ✅ 예측 회차 출력 -->
   <h2>예측 회차: <span id="round">불러오는 중...</span></h2>
+
+  <!-- ✅ 예측 결과 테이블 -->
   <table>
     <thead>
       <tr>
@@ -27,25 +53,29 @@
     </tbody>
   </table>
 
-<script>
-fetch("/predict")
-  .then(res => res.json())
-  .then(data => {
-    document.getElementById("round").textContent = data["예측회차"];
-    const tbody = document.getElementById("results");
-    tbody.innerHTML = "";
+  <!-- ✅ 예측 API에서 데이터 가져오기 -->
+  <script>
+    fetch("/predict")
+      .then(res => res.json())
+      .then(data => {
+        // 예측 회차 출력
+        document.getElementById("round").textContent = data["예측회차"];
 
-    const results = data["예측결과"];
-    Object.entries(results).forEach(([length, vals]) => {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${length}</td>
-        <td class="${vals.원본.includes("없음") ? 'none' : ''}">${vals.원본}</td>
-        <td class="${vals.대칭.includes("없음") ? 'none' : ''}">${vals.대칭}</td>
-      `;
-      tbody.appendChild(row);
-    });
-  });
-</script>
+        // 결과 테이블 생성
+        const tbody = document.getElementById("results");
+        tbody.innerHTML = "";
+
+        const results = data["예측결과"];
+        Object.entries(results).forEach(([length, vals]) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${length}</td>
+            <td class="${vals.원본.includes("없음") ? 'none' : ''}">${vals.원본}</td>
+            <td class="${vals.대칭.includes("없음") ? 'none' : ''}">${vals.대칭}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      });
+  </script>
 </body>
 </html>
