@@ -2,29 +2,33 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>사다리 예측 결과 (카드형)</title>
+  <title>사다리 블럭 예측 결과</title>
   <style>
     body {
       font-family: sans-serif;
       padding: 2rem;
-      background-color: #f7faff;
+      background-color: #f3f6fa;
     }
     h1 {
       margin-bottom: 1rem;
+    }
+    h2 {
+      margin: 1.5rem 0 0.5rem;
+      font-size: 1.2rem;
     }
     .group {
       margin-bottom: 2rem;
     }
     .cards {
       display: flex;
-      gap: 1rem;
       flex-wrap: wrap;
+      gap: 1rem;
     }
     .card {
       background: white;
       border-radius: 12px;
       padding: 1rem;
-      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      box-shadow: 0 0 6px rgba(0,0,0,0.1);
       width: 230px;
     }
     .card h3 {
@@ -38,7 +42,7 @@
     }
     .note {
       font-size: 0.85rem;
-      color: #444;
+      color: #555;
     }
     .none {
       color: #ccc;
@@ -46,7 +50,7 @@
   </style>
 </head>
 <body>
-  <h1>예측 회차: <span id="round">불러오는 중...</span></h1>
+  <h1>예측 회차: <span id="round">로딩 중...</span></h1>
   <div id="container"></div>
 
   <script>
@@ -71,7 +75,6 @@
         const container = document.getElementById("container");
         const grouped = {};
 
-        // 결과를 그룹별로 정리
         Object.keys(data).forEach(key => {
           if (key === "예측회차") return;
           const [group, type] = key.split("_");
@@ -79,7 +82,6 @@
           grouped[group].push({ type, ...data[key] });
         });
 
-        // 그룹별 카드 렌더링
         Object.entries(grouped).forEach(([group, items]) => {
           const div = document.createElement("div");
           div.className = "group";
@@ -96,7 +98,7 @@
             card.className = "card";
 
             const title = document.createElement("h3");
-            title.textContent = transformLabel[entry.type];
+            title.textContent = transformLabel[entry.type] || entry.type;
             card.appendChild(title);
 
             const val = document.createElement("div");
