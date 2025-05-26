@@ -1,8 +1,54 @@
 from flask import Flask, jsonify, send_from_directory
 import csv
+import requests
+import os
+import threading
+import time
 
 app = Flask(__name__)
+CSV_FILE = "ladder_results.csv"
+FETCH_URL = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
+CHECK_INTERVAL = 60  # 60초 간격으로 새 회차 확인
 
+# ✅ 자동 저장 루프
+
+def auto_fetch_loop():
+    while True:
+        try:
+            res = requests.get(FETCH_URL, timeout=5)
+            data = res.json()[0]
+            new_row = [
+                data["reg_date"],
+                str(data["date_round"]),
+                data["start_point"],
+                data["line_count"],
+                data["odd_even"]
+            ]
+
+            file_exists = os.path.exists(CSV_FILE)
+            existing = set()
+            if file_exists:
+                with open(CSV_FILE, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader, None)
+                    existing = set(row[1] for row in reader if len(row) > 1)
+
+            if new_row[1] not in existing:
+                with open(CSV_FILE, 'a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    if not file_exists:
+                        writer.writerow(["날짜", "회차", "좌우", "줄수", "홀짝"])
+                    writer.writerow(new_row)
+                print(f"✅ 새 회차 저장됨: {new_row[1]}")
+            else:
+                print(f"⏳ 이미 저장된 회차: {new_row[1]}")
+
+        except Exception as e:
+            print(f"❌ 오류 발생: {e}")
+
+        time.sleep(CHECK_INTERVAL)
+
+# ✅ 예측 블럭 변환 및 비교 함수들
 def convert_row(row):
     return {
         "start": row[2],
@@ -32,16 +78,14 @@ def index():
 @app.route("/predict")
 def predict():
     try:
-        # ✅ CSV 파일에서 직접 데이터 불러오기
-        with open("ladder_results.csv", "r", encoding="utf-8") as f:
+        with open(CSV_FILE, "r", encoding="utf-8") as f:
             reader = list(csv.reader(f))
 
         data = reader[1:]  # 헤더 제외
-        data = data[-5000:]  # 최근 5000줄
-        data.reverse()  # 최신이 위로 오도록
+        data = data[-5000:]
+        data.reverse()
 
-        round_num = int(data[0][1]) + 1  # 최신 회차 + 1
-
+        round_num = int(data[0][1]) + 1
         all_blocks = [convert_row(r) for r in data]
 
         results = {}
@@ -72,4 +116,5 @@ def predict():
         return jsonify({"error": str(e)})
 
 if __name__ == "__main__":
+    threading.Thread(target=auto_fetch_loop, daemon=True).start()
     app.run(host="0.0.0.0", port=5000)
