@@ -1,10 +1,11 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, request, send_file, Response
 from flask_cors import CORS
 import pandas as pd
 import requests
 import os
 import threading
 import time
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -12,7 +13,6 @@ CORS(app)
 CSV_PATH = "ladder_results.csv"
 URL = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
 
-# ✅ 실시간 결과 수집 및 CSV 저장
 def fetch_and_save():
     try:
         raw = requests.get(URL).json()
@@ -45,13 +45,11 @@ def fetch_and_save():
     except Exception as e:
         print("❌ 저장 중 오류:", e)
 
-# ✅ 5분마다 저장 반복 실행 (서버 시작 시 자동)
 def run_collector_loop():
     while True:
         fetch_and_save()
         time.sleep(300)
 
-# ✅ 블럭 변환
 def convert(row):
     side = '좌' if row['start_point'] == 'LEFT' else '우'
     count = str(row['line_count'])
@@ -101,17 +99,19 @@ def home():
 def predict():
     try:
         if not os.path.exists(CSV_PATH):
-            return jsonify({"error": "CSV 파일 없음"})
+            error_data = {"error": "CSV 파일 없음"}
+            return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
 
         df = pd.read_csv(CSV_PATH)
         if len(df) < 10:
-            return jsonify({"error": "CSV 데이터 부족"})
+            error_data = {"error": "CSV 데이터 부족"}
+            return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
 
         mode = request.args.get("mode", "3block_orig")
         size = int(mode[0])
         round_num = int(df.iloc[-1]["회차"]) + 1
 
-        data = df.tail(288).iloc[::-1]  # 최신값이 위로 오도록 정렬
+        data = df.tail(288).iloc[::-1]
         flow_list = [convert(row) for _, row in data.iterrows()]
         recent_flow = flow_list[:size]
 
@@ -126,19 +126,20 @@ def predict():
 
         result, blk, match_index = find_flow_match(flow, flow_list)
 
-        return jsonify({
+        response_data = {
             "예측회차": round_num,
             "예측값": result,
             "블럭": blk,
             "매칭순번": match_index if match_index > 0 else "❌ 없음"
-        })
+        }
+
+        return Response(json.dumps(response_data, ensure_ascii=False), mimetype='application/json')
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        error_data = {"error": str(e)}
+        return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
 
 if __name__ == '__main__':
-    # ✅ 수집 루프 스레드로 시작
     threading.Thread(target=run_collector_loop, daemon=True).start()
-
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
