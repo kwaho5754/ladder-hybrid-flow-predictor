@@ -2,78 +2,124 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>사다리 예측 결과 (3~6줄 / 원본 + 대칭)</title>
-  <!-- ✅ 기본 스타일 -->
+  <title>사다리 예측 결과 (카드형)</title>
   <style>
     body {
       font-family: sans-serif;
-      padding: 30px;
-      background: #f0f0f0;
+      padding: 2rem;
+      background-color: #f7faff;
     }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      overflow: hidden;
+    h1 {
+      margin-bottom: 1rem;
     }
-    th, td {
-      padding: 14px;
-      border-bottom: 1px solid #ddd;
-      text-align: center;
+    .group {
+      margin-bottom: 2rem;
     }
-    th {
-      background: #004488;
-      color: #fff;
+    .cards {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
-    tr:nth-child(even) {
-      background: #f9f9f9;
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      width: 230px;
+    }
+    .card h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1rem;
+    }
+    .value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .note {
+      font-size: 0.85rem;
+      color: #444;
     }
     .none {
-      color: #999;
+      color: #ccc;
     }
   </style>
 </head>
 <body>
-  <!-- ✅ 예측 회차 출력 -->
-  <h2>예측 회차: <span id="round">불러오는 중...</span></h2>
+  <h1>예측 회차: <span id="round">불러오는 중...</span></h1>
+  <div id="container"></div>
 
-  <!-- ✅ 예측 결과 테이블 -->
-  <table>
-    <thead>
-      <tr>
-        <th>블럭 길이</th>
-        <th>원본 예측값</th>
-        <th>대칭 예측값</th>
-      </tr>
-    </thead>
-    <tbody id="results">
-      <tr><td colspan="3">불러오는 중...</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ✅ 예측 API에서 데이터 가져오기 -->
   <script>
+    const modeTitles = {
+      "3block": "3줄 블럭",
+      "4block": "4줄 블럭",
+      "5block": "5줄 블럭",
+      "6block": "6줄 블럭"
+    };
+
+    const transformLabel = {
+      "orig": "원본",
+      "flip_start": "시작점 고정",
+      "flip_odd_even": "홀짝 고정",
+      "flip_full": "풀 대칭"
+    };
+
     fetch("/predict")
       .then(res => res.json())
       .then(data => {
-        // 예측 회차 출력
         document.getElementById("round").textContent = data["예측회차"];
+        const container = document.getElementById("container");
+        const grouped = {};
 
-        // 결과 테이블 생성
-        const tbody = document.getElementById("results");
-        tbody.innerHTML = "";
+        // 결과를 그룹별로 정리
+        Object.keys(data).forEach(key => {
+          if (key === "예측회차") return;
+          const [group, type] = key.split("_");
+          if (!grouped[group]) grouped[group] = [];
+          grouped[group].push({ type, ...data[key] });
+        });
 
-        const results = data["예측결과"];
-        Object.entries(results).forEach(([length, vals]) => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${length}</td>
-            <td class="${vals.원본.includes("없음") ? 'none' : ''}">${vals.원본}</td>
-            <td class="${vals.대칭.includes("없음") ? 'none' : ''}">${vals.대칭}</td>
-          `;
-          tbody.appendChild(row);
+        // 그룹별 카드 렌더링
+        Object.entries(grouped).forEach(([group, items]) => {
+          const div = document.createElement("div");
+          div.className = "group";
+
+          const h2 = document.createElement("h2");
+          h2.textContent = modeTitles[group];
+          div.appendChild(h2);
+
+          const cards = document.createElement("div");
+          cards.className = "cards";
+
+          items.forEach(entry => {
+            const card = document.createElement("div");
+            card.className = "card";
+
+            const title = document.createElement("h3");
+            title.textContent = transformLabel[entry.type];
+            card.appendChild(title);
+
+            const val = document.createElement("div");
+            val.className = "value";
+            val.textContent = entry["예측값"];
+            if (entry["예측값"].includes("없음")) val.classList.add("none");
+            card.appendChild(val);
+
+            const blk = document.createElement("div");
+            blk.className = "note";
+            blk.textContent = `블럭: ${entry["블럭"]}`;
+            card.appendChild(blk);
+
+            const idx = document.createElement("div");
+            idx.className = "note";
+            idx.textContent = `매칭순번: ${entry["매칭순번"]}`;
+            card.appendChild(idx);
+
+            cards.appendChild(card);
+          });
+
+          div.appendChild(cards);
+          container.appendChild(div);
         });
       });
   </script>

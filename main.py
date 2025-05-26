@@ -12,23 +12,26 @@ def convert(entry):
     oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
     return f"{side}{count}{oe}"
 
-def flip(block):
-    result = []
-    for b in block:
-        s = b[0]
-        c = b[1:-1]
-        o = b[-1]
-        flipped = ('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀')
-        result.append(flipped)
-    return result
+def parse_block(s):
+    return s[0], s[1:-1], s[-1]
+
+# 4가지 변형 방식
+def flip_full(block):
+    return [('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
+
+def flip_start(block):
+    return [s + ('4' if c == '3' else '3') + ('홀' if o == '짝' else '짝') for s, c, o in map(parse_block, block)]
+
+def flip_odd_even(block):
+    return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
 def find_prediction(block, all_blocks):
     for i in reversed(range(len(all_blocks) - len(block))):
         if all_blocks[i:i+len(block)] == block:
-            if i - 1 >= 0:
-                return all_blocks[i - 1]
-            break
-    return "❌ 없음"
+            pred_index = i - 1
+            pred = all_blocks[pred_index] if pred_index >= 0 else "❌ 없음"
+            return pred, ">".join(block), i + 1
+    return "❌ 없음", ">".join(block), -1
 
 @app.route("/")
 def home():
@@ -40,23 +43,32 @@ def predict():
         url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
         raw = requests.get(url).json()
         data = raw[-288:]
-        round_num = int(raw[0]['date_round']) + 1
+        round_num = int(data[0]['date_round']) + 1
         all_blocks = [convert(d) for d in data]
 
         results = {}
+        transforms = {
+            "orig": lambda x: x,
+            "flip_start": flip_start,
+            "flip_odd_even": flip_odd_even,
+            "flip_full": flip_full
+        }
+
         for size in range(3, 7):
-            recent_block = [convert(d) for d in data[:size]]
-            flipped_block = flip(recent_block)
+            base_block = [convert(d) for d in data[:size]]
+            for key, func in transforms.items():
+                transformed = func(base_block)
+                pred, blk, idx = find_prediction(transformed, all_blocks)
+                results[f"{size}block_{key}"] = {
+                    "예측값": pred,
+                    "블럭": blk,
+                    "매칭순번": idx
+                }
 
-            original = find_prediction(recent_block, all_blocks)
-            flipped = find_prediction(flipped_block, all_blocks)
-
-            results[f"{size}줄"] = {
-                "원본": original,
-                "대칭": flipped
-            }
-
-        return jsonify({"예측회차": round_num, "예측결과": results})
+        return jsonify({
+            "예측회차": round_num,
+            **results
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)})
