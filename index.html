@@ -5,45 +5,99 @@
   <title>사다리 예측 결과</title>
   <style>
     body { font-family: sans-serif; padding: 2em; background: #f9f9f9; }
-    .card { background: #fff; padding: 1em; margin: 1em 0; border-radius: 8px; box-shadow: 0 0 5px #ccc; }
-    .card h2 { margin: 0 0 10px; }
+    .cards-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1em;
+    }
+    .card {
+      background: #fff;
+      padding: 1em;
+      border-radius: 8px;
+      box-shadow: 0 0 5px #ccc;
+      width: 220px;
+      flex-shrink: 0;
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 1.1em;
+    }
+    .card p {
+      margin: 4px 0;
+    }
+    ol {
+      padding-left: 20px;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
-  <h1>🔮 사다리 예측 결과</h1>
-  <div class="card" id="prediction-box">
-    <h2>예측 회차: <span id="round">...</span></h2>
-    <p>Top3 예측 결과:</p>
-    <ol id="results">
-      <li>...</li>
-      <li>...</li>
-      <li>...</li>
-    </ol>
+  <h1>🔮 사다리 블럭 예측 결과 (세트1 동일 UI)</h1>
+  <div class="cards-container" id="results-container">
+    <!-- 예측 카드들이 여기에 동적으로 추가됩니다 -->
   </div>
 
   <script>
-    fetch("/predict")
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("round").innerText = data["예측회차"] ?? data["회차"] ?? "...";
-        const resultList = document.getElementById("results");
-        resultList.innerHTML = "";
-        const preds = data["예측값"] || data["예측"] || ["❌ 없음", "❌ 없음", "❌ 없음"];
-        if (Array.isArray(preds)) {
-          preds.forEach(val => {
-            const li = document.createElement("li");
-            li.textContent = val;
-            resultList.appendChild(li);
-          });
-        } else {
-          const li = document.createElement("li");
-          li.textContent = preds;
-          resultList.appendChild(li);
+    // 세트1 모드 리스트 (3~6줄, 4가지 변형 = 총 16개)
+    const modes = [
+      "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
+      "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even",
+      "5block_orig", "5block_flip_full", "5block_flip_start", "5block_flip_odd_even",
+      "6block_orig", "6block_flip_full", "6block_flip_start", "6block_flip_odd_even"
+    ];
+
+    const modeNames = {
+      "orig": "원본",
+      "flip_full": "완전 대칭",
+      "flip_start": "시작점 변형",
+      "flip_odd_even": "홀짝 변형"
+    };
+
+    function createCard(mode, data) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      // 줄수와 변형명 분리
+      const blockSize = mode.substring(0, 1);
+      const transform = mode.substring(mode.indexOf("_") + 1);
+
+      card.innerHTML = `
+        <h3>${blockSize}줄 블럭 (${modeNames[transform] || transform})</h3>
+        <p><strong>예측 회차:</strong> ${data["예측회차"] || "..."}</p>
+        <p><strong>예측값:</strong></p>
+        <ol>
+          <li>${Array.isArray(data["예측값"]) ? data["예측값"][0] : data["예측값"] || "❌ 없음"}</li>
+          <li>${Array.isArray(data["예측값"]) ? data["예측값"][1] || "❌ 없음" : "❌ 없음"}</li>
+          <li>${Array.isArray(data["예측값"]) ? data["예측값"][2] || "❌ 없음" : "❌ 없음"}</li>
+        </ol>
+        <p><strong>블럭:</strong> ${data["블럭"] || "..."}</p>
+        <p><strong>매칭 순번:</strong> ${data["매칭순번"] || "..."}</p>
+      `;
+
+      return card;
+    }
+
+    async function loadResults() {
+      const container = document.getElementById("results-container");
+      container.innerHTML = "";
+
+      for (const mode of modes) {
+        try {
+          const response = await fetch(`/predict?mode=${mode}`);
+          const data = await response.json();
+          const card = createCard(mode, data);
+          container.appendChild(card);
+        } catch (err) {
+          const errorCard = document.createElement("div");
+          errorCard.className = "card";
+          errorCard.textContent = `${mode} 예측 결과 로드 실패`;
+          container.appendChild(errorCard);
         }
-      })
-      .catch(err => {
-        document.getElementById("results").innerHTML = "<li>❌ 네트워크 오류</li>";
-      });
+      }
+    }
+
+    // 페이지 로드 시 예측 결과 불러오기
+    window.onload = loadResults;
   </script>
 </body>
 </html>
