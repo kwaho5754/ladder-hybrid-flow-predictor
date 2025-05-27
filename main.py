@@ -142,6 +142,18 @@ def predict():
         error_data = {"error": str(e)}
         return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
 
+@app.route("/check_csv")
+def check_csv():
+    if os.path.exists(CSV_PATH):
+        try:
+            df = pd.read_csv(CSV_PATH)
+            rounds = df['회차'].tolist()[:5]
+            return f"CSV 있음, 회차 일부: {rounds}"
+        except Exception as e:
+            return f"CSV 읽기 오류: {str(e)}"
+    else:
+        return "CSV 파일 없음"
+
 if __name__ == '__main__':
     fetch_and_save()
     port = int(os.environ.get("PORT", 5000))
