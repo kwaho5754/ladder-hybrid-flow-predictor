@@ -19,6 +19,10 @@ def fetch_and_save():
 
         df_new = pd.json_normalize(data)
 
+        # 'date_round' 컬럼명을 '회차'로 변경
+        if 'date_round' in df_new.columns:
+            df_new = df_new.rename(columns={'date_round': '회차'})
+
         if os.path.exists(CSV_PATH):
             df_existing = pd.read_csv(CSV_PATH)
             df = pd.concat([df_existing, df_new]).drop_duplicates(subset=['회차'], keep='last')
