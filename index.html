@@ -2,43 +2,104 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>사다리 예측 결과</title>
+  <title>사다리 블럭 예측 결과 (줄수별 분리)</title>
   <style>
-    body { font-family: sans-serif; padding: 2em; background: #f9f9f9; }
+    body {
+      font-family: "Noto Sans KR", sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      padding: 2em;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    h1 {
+      font-weight: 700;
+      margin-bottom: 1.5em;
+      font-size: 1.8rem;
+      color: #333;
+      text-align: center;
+    }
+    section {
+      margin-bottom: 2.5em;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 1.5em;
+    }
+    section h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1em;
+      color: #444;
+      border-left: 5px solid #0078d7;
+      padding-left: 0.5em;
+    }
     .cards-container {
       display: flex;
+      gap: 20px;
       flex-wrap: wrap;
-      gap: 1em;
     }
     .card {
       background: #fff;
-      padding: 1em;
-      border-radius: 8px;
-      box-shadow: 0 0 5px #ccc;
-      width: 220px;
+      border-radius: 10px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      padding: 18px 20px;
+      width: 260px;
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: box-shadow 0.3s ease;
+    }
+    .card:hover {
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
     }
     .card h3 {
-      margin: 0 0 8px;
-      font-size: 1.1em;
+      font-size: 1.2rem;
+      margin: 0 0 12px;
+      color: #222;
+      font-weight: 700;
     }
     .card p {
       margin: 4px 0;
+      font-size: 0.9rem;
+      color: #555;
+      line-height: 1.3;
     }
-    ol {
+    .card ol {
       padding-left: 20px;
-      margin: 0;
+      margin: 6px 0 0;
+      font-size: 0.9rem;
+      color: #444;
+    }
+    .card ol li {
+      margin-bottom: 3px;
     }
   </style>
 </head>
 <body>
-  <h1>🔮 사다리 블럭 예측 결과 (세트1 동일 UI)</h1>
-  <div class="cards-container" id="results-container">
-    <!-- 예측 카드들이 여기에 동적으로 추가됩니다 -->
-  </div>
+  <h1>🔮 사다리 블럭 예측 결과 (줄수별 분리)</h1>
+
+  <section id="section-3">
+    <h2>3줄 블럭 예측 결과</h2>
+    <div class="cards-container" id="cards-3"></div>
+  </section>
+
+  <section id="section-4">
+    <h2>4줄 블럭 예측 결과</h2>
+    <div class="cards-container" id="cards-4"></div>
+  </section>
+
+  <section id="section-5">
+    <h2>5줄 블럭 예측 결과</h2>
+    <div class="cards-container" id="cards-5"></div>
+  </section>
+
+  <section id="section-6">
+    <h2>6줄 블럭 예측 결과</h2>
+    <div class="cards-container" id="cards-6"></div>
+  </section>
 
   <script>
-    // 세트1 모드 리스트 (3~6줄, 4가지 변형 = 총 16개)
     const modes = [
       "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
       "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even",
@@ -57,7 +118,6 @@
       const card = document.createElement("div");
       card.className = "card";
 
-      // 줄수와 변형명 분리
       const blockSize = mode.substring(0, 1);
       const transform = mode.substring(mode.indexOf("_") + 1);
 
@@ -78,25 +138,26 @@
     }
 
     async function loadResults() {
-      const container = document.getElementById("results-container");
-      container.innerHTML = "";
-
-      for (const mode of modes) {
-        try {
-          const response = await fetch(`/predict?mode=${mode}`);
-          const data = await response.json();
-          const card = createCard(mode, data);
-          container.appendChild(card);
-        } catch (err) {
-          const errorCard = document.createElement("div");
-          errorCard.className = "card";
-          errorCard.textContent = `${mode} 예측 결과 로드 실패`;
-          container.appendChild(errorCard);
+      for (const size of [3,4,5,6]) {
+        const container = document.getElementById(`cards-${size}`);
+        container.innerHTML = "";
+        const sizeModes = modes.filter(m => m.startsWith(size));
+        for (const mode of sizeModes) {
+          try {
+            const response = await fetch(`/predict?mode=${mode}`);
+            const data = await response.json();
+            const card = createCard(mode, data);
+            container.appendChild(card);
+          } catch (err) {
+            const errorCard = document.createElement("div");
+            errorCard.className = "card";
+            errorCard.textContent = `${mode} 예측 결과 로드 실패`;
+            container.appendChild(errorCard);
+          }
         }
       }
     }
 
-    // 페이지 로드 시 예측 결과 불러오기
     window.onload = loadResults;
   </script>
 </body>
