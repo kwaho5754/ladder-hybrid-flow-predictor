@@ -17,21 +17,28 @@ def fetch_and_save():
         response = requests.get(url)
         df_new = pd.json_normalize(response.json())
 
-        # 'date_round' → '회차'로 변경
         if 'date_round' in df_new.columns:
             df_new = df_new.rename(columns={'date_round': '회차'})
 
+        df_new['회차'] = df_new['회차'].astype(int)
+
         if os.path.exists(CSV_PATH):
             df_existing = pd.read_csv(CSV_PATH)
-            existing_rounds = set(df_existing['회차'].astype(str))
-            new_rows = df_new[~df_new['회차'].astype(str).isin(existing_rounds)]
+            df_existing['회차'] = df_existing['회차'].astype(int)
+
+            existing_rounds = set(df_existing['회차'])
+            new_rows = df_new[~df_new['회차'].isin(existing_rounds)]
+
+            print(f"CSV 마지막 회차: {df_existing['회차'].max()}")
+            print(f"신규 JSON 회차(최대): {df_new['회차'].max()}")
+            print(f"실제 추가된 회차 수: {len(new_rows)}")
 
             if not new_rows.empty:
                 df_updated = pd.concat([df_existing, new_rows])
                 df_updated.to_csv(CSV_PATH, index=False)
                 print(f"CSV 저장 완료: {len(new_rows)}개 새 회차 추가")
             else:
-                print("신규 회차 없음, 저장 생략")
+                print("✅ 신규 회차 없음, 저장 생략")
         else:
             df_new.to_csv(CSV_PATH, index=False)
             print(f"CSV 새로 생성: {len(df_new)}개 행")
