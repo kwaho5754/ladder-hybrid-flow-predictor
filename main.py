@@ -40,15 +40,40 @@ def flip_odd_even(block):
         flipped.append(s_flip + c_flip + o)
     return flipped
 
-def find_flow_match(block, full_data):
-    block_len = len(block)
-    for i in reversed(range(len(full_data) - block_len)):
-        candidate = full_data[i:i+block_len]
-        if candidate == block:
+def find_flow_matches(full_data, max_block=6, min_block=3):
+    """
+    블럭 길이별로 짧은 블럭부터 매칭 시도,
+    매칭되면 다음 블럭 길이는 건너뛰고,
+    중복 없이 매칭된 예측값 리스트 반환
+    """
+    results = []
+    used_indices = set()  # 매칭된 인덱스 중복 방지용
+
+    for block_len in range(min_block, max_block + 1):
+        found = False
+        for i in reversed(range(len(full_data) - block_len)):
+            if any(idx in used_indices for idx in range(i, i + block_len)):
+                # 이미 사용된 인덱스 영역은 건너뜀
+                continue
+            block = full_data[i:i+block_len]
+            # 최근 상단(위쪽) 값 인덱스
             pred_index = i - 1
             pred = full_data[pred_index] if pred_index >= 0 else "❌ 없음"
-            return pred, ">".join(block), i + 1
-    return "❌ 없음", ">".join(block), -1
+            # 결과 추가
+            results.append({
+                "예측값": pred,
+                "블럭": ">".join(block),
+                "매칭순번": i + 1
+            })
+            # 사용 인덱스 등록하여 중복 방지
+            for idx in range(i, i + block_len):
+                used_indices.add(idx)
+            found = True
+            break  # 첫 매칭 후 해당 블럭길이 종료, 다음 블럭길이로 넘어감
+        if found:
+            # 해당 블럭 길이에서 매칭 됐으므로 다음 블럭 길이로 넘어감
+            continue
+    return results
 
 @app.route("/")
 def home():
@@ -67,11 +92,13 @@ def predict():
             return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
 
         mode = request.args.get("mode", "3block_orig")
-        size = int(mode[0])
-        round_num = int(df.iloc[-1]["회차"]) + 1
 
-        data = df.tail(288).iloc[::-1]
+        # 5000줄 범위로 늘림
+        data = df.tail(5000).iloc[::-1]
         flow_list = [convert(row) for _, row in data.iterrows()]
+
+        # 블럭 변형 적용
+        size = int(mode[0])
         recent_flow = flow_list[:size]
 
         if "flip_full" in mode:
@@ -83,13 +110,22 @@ def predict():
         else:
             flow = recent_flow
 
-        result, blk, match_index = find_flow_match(flow, flow_list)
+        # 중복 없는 블럭 매칭 결과 리스트 받기
+        matches = find_flow_matches(flow_list)
+
+        # 예측 회차 계산
+        round_num = int(df.iloc[-1]["회차"]) + 1
+
+        # 최대 3개 예측값 리턴 (없으면 ❌ 없음)
+        top_preds = [m["예측값"] for m in matches[:3]]
+        while len(top_preds) < 3:
+            top_preds.append("❌ 없음")
 
         response_data = {
             "예측회차": round_num,
-            "예측값": result,
-            "블럭": blk,
-            "매칭순번": match_index if match_index > 0 else "❌ 없음"
+            "예측값": top_preds,
+            "블럭": matches[0]["블럭"] if matches else "❌ 없음",
+            "매칭순번": matches[0]["매칭순번"] if matches else "❌ 없음"
         }
 
         return Response(json.dumps(response_data, ensure_ascii=False), mimetype='application/json')
