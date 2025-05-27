@@ -15,26 +15,31 @@ def fetch_and_save():
     try:
         url = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
         response = requests.get(url)
-        data = response.json()
+        df_new = pd.json_normalize(response.json())
 
-        df_new = pd.json_normalize(data)
-
-        # 'date_round' 컬럼명을 '회차'로 변경
+        # 'date_round' → '회차'로 변경
         if 'date_round' in df_new.columns:
             df_new = df_new.rename(columns={'date_round': '회차'})
 
         if os.path.exists(CSV_PATH):
             df_existing = pd.read_csv(CSV_PATH)
-            df = pd.concat([df_existing, df_new]).drop_duplicates(subset=['회차'], keep='last')
-        else:
-            df = df_new
+            existing_rounds = set(df_existing['회차'].astype(str))
+            new_rows = df_new[~df_new['회차'].astype(str).isin(existing_rounds)]
 
-        df.to_csv(CSV_PATH, index=False)
-        print(f"CSV 저장 완료: {len(df)}개 행")
+            if not new_rows.empty:
+                df_updated = pd.concat([df_existing, new_rows])
+                df_updated.to_csv(CSV_PATH, index=False)
+                print(f"CSV 저장 완료: {len(new_rows)}개 새 회차 추가")
+            else:
+                print("신규 회차 없음, 저장 생략")
+        else:
+            df_new.to_csv(CSV_PATH, index=False)
+            print(f"CSV 새로 생성: {len(df_new)}개 행")
+
     except Exception as e:
         print(f"CSV 저장 실패: {e}")
 
-    threading.Timer(60, fetch_and_save).start()  # 60초 후 다시 실행
+    threading.Timer(60, fetch_and_save).start()
 
 def convert(row):
     side = '좌' if row['start_point'] == 'LEFT' else '우'
@@ -125,7 +130,7 @@ def predict():
         else:
             flow = recent_flow
 
-        matches = find_flow_matches(flow_list)
+        matches = find_flow_matches(flow)
 
         round_num = int(df.iloc[-1]["회차"]) + 1
 
