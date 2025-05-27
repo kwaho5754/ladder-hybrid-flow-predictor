@@ -25,7 +25,6 @@
     fetch("/predict")
       .then(res => res.json())
       .then(data => {
-        // 서버 응답 키에 맞게 수정: "예측회차", "예측값" 사용
         document.getElementById("round").innerText = data["예측회차"] ?? data["회차"] ?? "...";
         const resultList = document.getElementById("results");
         resultList.innerHTML = "";

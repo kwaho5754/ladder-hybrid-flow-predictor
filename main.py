@@ -1,54 +1,13 @@
 from flask import Flask, request, send_file, Response
 from flask_cors import CORS
 import pandas as pd
-import requests
 import os
-import threading
-import time
 import json
 
 app = Flask(__name__)
 CORS(app)
 
 CSV_PATH = "ladder_results.csv"
-URL = "https://ntry.com/data/json/games/power_ladder/recent_result.json"
-
-def fetch_and_save():
-    try:
-        raw = requests.get(URL).json()
-        if not raw:
-            print("❌ 실시간 데이터 없음")
-            return
-
-        latest = raw[0]
-        latest_round = int(latest["date_round"])
-
-        new_row = {
-            "회차": latest_round,
-            "start_point": latest["start_point"],
-            "line_count": latest["line_count"],
-            "odd_even": latest["odd_even"]
-        }
-
-        if os.path.exists(CSV_PATH):
-            df = pd.read_csv(CSV_PATH)
-            if latest_round in df["회차"].values:
-                print(f"✅ 이미 저장됨: {latest_round}회차")
-                return
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        else:
-            df = pd.DataFrame([new_row])
-
-        df.to_csv(CSV_PATH, index=False)
-        print(f"✅ 저장 완료: {latest_round}회차")
-
-    except Exception as e:
-        print("❌ 저장 중 오류:", e)
-
-def run_collector_loop():
-    while True:
-        fetch_and_save()
-        time.sleep(300)
 
 def convert(row):
     side = '좌' if row['start_point'] == 'LEFT' else '우'
@@ -140,6 +99,5 @@ def predict():
         return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
 
 if __name__ == '__main__':
-    threading.Thread(target=run_collector_loop, daemon=True).start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
