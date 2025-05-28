@@ -29,19 +29,11 @@ def fetch_and_save():
             existing_rounds = set(df_existing['회차'])
             new_rows = df_new[~df_new['회차'].isin(existing_rounds)]
 
-            print(f"CSV 마지막 회차: {df_existing['회차'].max()}")
-            print(f"신규 JSON 회차(최대): {df_new['회차'].max()}")
-            print(f"실제 추가된 회차 수: {len(new_rows)}")
-
             if not new_rows.empty:
                 df_updated = pd.concat([df_existing, new_rows])
                 df_updated.to_csv(CSV_PATH, index=False)
-                print(f"CSV 저장 완료: {len(new_rows)}개 새 회차 추가")
-            else:
-                print("✅ 신규 회차 없음, 저장 생략")
         else:
             df_new.to_csv(CSV_PATH, index=False)
-            print(f"CSV 새로 생성: {len(df_new)}개 행")
 
     except Exception as e:
         print(f"CSV 저장 실패: {e}")
@@ -79,25 +71,29 @@ def flip_odd_even(block):
         flipped.append(s_flip + c_flip + o)
     return flipped
 
-def find_flow_matches(full_data, max_block=6, min_block=3):
+def find_flow_matches(flow, max_block=6, min_block=3):
     results = []
-    used_indices = set()
+    used_blocks = []
 
     for block_len in range(min_block, max_block + 1):
         found = False
-        for i in reversed(range(len(full_data) - block_len)):
-            if any(idx in used_indices for idx in range(i, i + block_len)):
+        for i in reversed(range(len(flow) - block_len)):
+            block = flow[i:i + block_len]
+            block_str = ">".join(block)
+
+            # 중복 블럭 여부 판단
+            is_overlapping = any(prev in block_str for prev in used_blocks)
+            if is_overlapping:
                 continue
-            block = full_data[i:i+block_len]
+
             pred_index = i - 1
-            pred = full_data[pred_index] if pred_index >= 0 else "❌ 없음"
+            pred = flow[pred_index] if pred_index >= 0 else "❌ 없음"
             results.append({
                 "예측값": pred,
-                "블럭": ">".join(block),
+                "블럭": block_str,
                 "매칭순번": i + 1
             })
-            for idx in range(i, i + block_len):
-                used_indices.add(idx)
+            used_blocks.append(block_str)
             found = True
             break
         if found:
@@ -112,19 +108,15 @@ def home():
 def predict():
     try:
         if not os.path.exists(CSV_PATH):
-            error_data = {"error": "CSV 파일 없음"}
-            return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
+            return Response(json.dumps({"error": "CSV 파일 없음"}, ensure_ascii=False), mimetype='application/json')
 
         df = pd.read_csv(CSV_PATH)
         if len(df) < 10:
-            error_data = {"error": "CSV 데이터 부족"}
-            return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
+            return Response(json.dumps({"error": "CSV 데이터 부족"}, ensure_ascii=False), mimetype='application/json')
 
         mode = request.args.get("mode", "3block_orig")
-
         data = df.tail(5000).iloc[::-1]
         flow_list = [convert(row) for _, row in data.iterrows()]
-
         size = int(mode[0])
         recent_flow = flow_list[:size]
 
@@ -140,7 +132,6 @@ def predict():
         matches = find_flow_matches(flow)
 
         round_num = int(df.iloc[-1]["회차"]) + 1
-
         top_preds = [m["예측값"] for m in matches[:3]]
         while len(top_preds) < 3:
             top_preds.append("❌ 없음")
@@ -155,8 +146,7 @@ def predict():
         return Response(json.dumps(response_data, ensure_ascii=False), mimetype='application/json')
 
     except Exception as e:
-        error_data = {"error": str(e)}
-        return Response(json.dumps(error_data, ensure_ascii=False), mimetype='application/json')
+        return Response(json.dumps({"error": str(e)}, ensure_ascii=False), mimetype='application/json')
 
 @app.route("/check_csv")
 def check_csv():
