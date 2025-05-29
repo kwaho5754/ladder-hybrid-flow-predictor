@@ -2,101 +2,57 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>사다리 블럭 예측 결과 (줄수별 4열 그리드)</title>
+  <title>사다리 블럭 예측 결과</title>
   <style>
     body {
       font-family: "Noto Sans KR", sans-serif;
-      background: #f9f9f9;
-      margin: 0;
-      padding: 2em;
-      max-width: 1200px;
-      margin-left: auto;
-      margin-right: auto;
+      background: #f4f7ff;
+      padding: 2rem;
     }
     h1 {
-      font-weight: 700;
-      margin-bottom: 1.5em;
       font-size: 1.8rem;
-      color: #333;
+      margin-bottom: 2rem;
       text-align: center;
     }
-    section {
-      margin-bottom: 2.5em;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 1.5em;
+    .section {
+      margin-bottom: 2rem;
     }
-    section h2 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 1em;
-      color: #444;
-      border-left: 5px solid #0078d7;
-      padding-left: 0.5em;
-    }
-    .cards-container {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px 24px;
+    .card-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
     .card {
       background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
-      padding: 18px 20px;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      transition: box-shadow 0.3s ease;
-    }
-    .card:hover {
-      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+      padding: 1rem;
+      border-radius: 0.8rem;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      width: 240px;
     }
     .card h3 {
-      font-size: 1.2rem;
-      margin: 0 0 12px;
-      color: #222;
-      font-weight: 700;
+      margin: 0 0 0.5rem 0;
+      font-size: 1rem;
     }
-    .card p {
-      margin: 4px 0;
-      font-size: 0.9rem;
+    .value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      background: #e1edff;
+      padding: 0.3rem 0.5rem;
+      display: inline-block;
+      border-radius: 0.4rem;
+    }
+    .note {
+      font-size: 0.85rem;
       color: #555;
-      line-height: 1.3;
-    }
-    .card ol {
-      padding-left: 20px;
-      margin: 6px 0 0;
-      font-size: 0.9rem;
-      color: #444;
-    }
-    .card ol li {
-      margin-bottom: 3px;
+      margin-top: 0.2rem;
     }
   </style>
 </head>
 <body>
-  <h1>🔮 사다리 블럭 예측 결과 (줄수별 4열 그리드)</h1>
+  <h1>🔮 사다리 블럭 예측 결과</h1>
 
-  <section id="section-3">
-    <h2>3줄 블럭 예측 결과</h2>
-    <div class="cards-container" id="cards-3"></div>
-  </section>
-
-  <section id="section-4">
-    <h2>4줄 블럭 예측 결과</h2>
-    <div class="cards-container" id="cards-4"></div>
-  </section>
-
-  <section id="section-5">
-    <h2>5줄 블럭 예측 결과</h2>
-    <div class="cards-container" id="cards-5"></div>
-  </section>
-
-  <section id="section-6">
-    <h2>6줄 블럭 예측 결과</h2>
-    <div class="cards-container" id="cards-6"></div>
-  </section>
+  <div id="results"></div>
 
   <script>
     const modes = [
@@ -106,58 +62,81 @@
       "6block_orig", "6block_flip_full", "6block_flip_start", "6block_flip_odd_even"
     ];
 
-    const modeNames = {
-      "orig": "원본",
-      "flip_full": "완전 대칭",
-      "flip_start": "시작점 변형",
-      "flip_odd_even": "홀짝 변형"
+    const modeTitles = {
+      "3block": "3줄 블럭",
+      "4block": "4줄 블럭",
+      "5block": "5줄 블럭",
+      "6block": "6줄 블럭"
     };
+
+    const transformLabel = {
+      "orig": "원본",
+      "flip_start": "시작점 변형",
+      "flip_odd_even": "홀짝 변형",
+      "flip_full": "완전 대칭"
+    };
+
+    const getModeKey = (mode) => mode.split("_")[0];
 
     function createCard(mode, data) {
       const card = document.createElement("div");
       card.className = "card";
 
-      const blockSize = mode.substring(0, 1);
-      const transform = mode.substring(mode.indexOf("_") + 1);
+      const mkey = getModeKey(mode);
+      const typeKey = mode.split("_").slice(1).join("_");
 
-      card.innerHTML = `
-        <h3>${blockSize}줄 블럭 (${modeNames[transform] || transform})</h3>
-        <p><strong>예측 회차:</strong> ${data["예측회차"] || "..."}</p>
-        <p><strong>예측값:</strong></p>
-        <ol>
-          <li>${Array.isArray(data["예측값"]) ? data["예측값"][0] : data["예측값"] || "❌ 없음"}</li>
-          <li>${Array.isArray(data["예측값"]) ? data["예측값"][1] || "❌ 없음" : "❌ 없음"}</li>
-          <li>${Array.isArray(data["예측값"]) ? data["예측값"][2] || "❌ 없음" : "❌ 없음"}</li>
-        </ol>
-        <p><strong>블럭:</strong> ${data["블럭"] || "..."}</p>
-        <p><strong>매칭 순번:</strong> ${data["매칭순번"] || "..."}</p>
-      `;
+      const label = document.createElement("h3");
+      label.textContent = `${modeTitles[mkey]} (${transformLabel[typeKey]}) (회차 ${data["예측회차"]})`;
+      card.appendChild(label);
+
+      const value = document.createElement("div");
+      value.className = "value";
+      value.textContent = data["예측값"] || "❌ 없음";
+      card.appendChild(value);
+
+      const note = document.createElement("div");
+      note.className = "note";
+      note.textContent = `블럭: ${data["블럭"]}`;
+      card.appendChild(note);
+
+      const match = document.createElement("div");
+      match.className = "note";
+      match.textContent = `매칭순번: ${data["매칭순번"]}`;
+      card.appendChild(match);
 
       return card;
     }
 
     async function loadResults() {
-      for (const size of [3,4,5,6]) {
-        const container = document.getElementById(`cards-${size}`);
-        container.innerHTML = "";
-        const sizeModes = modes.filter(m => m.startsWith(size));
-        for (const mode of sizeModes) {
-          try {
-            const response = await fetch(`/predict?mode=${mode}`);
-            const data = await response.json();
-            const card = createCard(mode, data);
-            container.appendChild(card);
-          } catch (err) {
-            const errorCard = document.createElement("div");
-            errorCard.className = "card";
-            errorCard.textContent = `${mode} 예측 결과 로드 실패`;
-            container.appendChild(errorCard);
-          }
+      const resultContainer = document.getElementById("results");
+      const sectionMap = {};
+
+      for (const mode of modes) {
+        const res = await fetch(`/predict?mode=${mode}`);
+        const data = await res.json();
+
+        const sectionKey = getModeKey(mode);
+        if (!sectionMap[sectionKey]) {
+          const section = document.createElement("div");
+          section.className = "section";
+
+          const title = document.createElement("h2");
+          title.textContent = modeTitles[sectionKey];
+          section.appendChild(title);
+
+          const group = document.createElement("div");
+          group.className = "card-group";
+          section.appendChild(group);
+
+          resultContainer.appendChild(section);
+          sectionMap[sectionKey] = group;
         }
+
+        sectionMap[sectionKey].appendChild(createCard(mode, data));
       }
     }
 
-    window.onload = loadResults;
+    loadResults();
   </script>
 </body>
 </html>

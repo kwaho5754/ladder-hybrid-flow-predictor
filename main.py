@@ -39,34 +39,16 @@ def flip_odd_even(block):
         flipped.append(s_flip + c_flip + o)
     return flipped
 
-# ✅ 블럭 겹침 방지: 앞 블럭 매칭되면, 이후 블럭이 그 일부 포함 시 건너뜀
-def find_flow_matches(flow, max_block=6, min_block=3):
-    results = []
-    used_ranges = []
-
-    for block_len in range(min_block, max_block + 1):
-        found = False
-        for i in reversed(range(len(flow) - block_len)):
-            block_range = set(range(i, i + block_len))
-            if any(block_range & used for used in used_ranges):
-                continue
-
-            block = flow[i:i + block_len]
+# ✅ 최근 매칭된 블럭 기준으로 "위줄" 예측값 반환
+def find_flow_match(block, full_data):
+    block_len = len(block)
+    for i in reversed(range(len(full_data) - block_len)):
+        candidate = full_data[i:i+block_len]
+        if candidate == block:
             pred_index = i - 1
-            pred = flow[pred_index] if pred_index >= 0 else "❌ 없음"
-
-            results.append({
-                "예측값": pred,
-                "블럭": ">".join(block),
-                "매칭순번": i + 1
-            })
-
-            used_ranges.append(set(range(i, i + block_len)))
-            found = True
-            break
-        if found:
-            continue
-    return results
+            pred = full_data[pred_index] if pred_index >= 0 else "❌ 없음"
+            return pred, ">".join(block), i + 1
+    return "❌ 없음", ">".join(block), -1
 
 @app.route("/")
 def home():
@@ -92,20 +74,14 @@ def predict():
         else:
             flow = recent_flow
 
-        matches = find_flow_matches(all_data)
+        result, blk, match_index = find_flow_match(flow, all_data)
 
-        top_preds = [m["예측값"] for m in matches[:3]]
-        while len(top_preds) < 3:
-            top_preds.append("❌ 없음")
-
-        response_data = {
+        return jsonify({
             "예측회차": round_num,
-            "예측값": top_preds,
-            "블럭": matches[0]["블럭"] if matches else "❌ 없음",
-            "매칭순번": matches[0]["매칭순번"] if matches else "❌ 없음"
-        }
-
-        return jsonify(response_data)
+            "예측값": result,
+            "블럭": blk,
+            "매칭순번": match_index if match_index > 0 else "❌ 없음"
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)})
