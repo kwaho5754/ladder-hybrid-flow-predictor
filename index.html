@@ -27,30 +27,24 @@
       padding: 1rem;
       border-radius: 0.8rem;
       box-shadow: 0 0 8px rgba(0,0,0,0.1);
-      width: 240px;
+      width: 260px;
     }
     .card h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1rem;
     }
-    .value {
-      font-size: 1.4rem;
-      font-weight: bold;
-      margin-bottom: 0.5rem;
-      background: #e1edff;
-      padding: 0.3rem 0.5rem;
-      display: inline-block;
-      border-radius: 0.4rem;
+    .card ol {
+      padding-left: 1.2rem;
+      margin-top: 0.5rem;
     }
-    .note {
-      font-size: 0.85rem;
-      color: #555;
-      margin-top: 0.2rem;
+    .card li {
+      font-size: 0.9rem;
+      margin-bottom: 0.4rem;
     }
   </style>
 </head>
 <body>
-  <h1>🔮 사다리 블럭 예측 결과 (3줄/4줄)</h1>
+  <h1>🔮 사다리 블럭 예측 결과</h1>
 
   <div id="results"></div>
 
@@ -85,20 +79,13 @@
       label.textContent = `${modeTitles[mkey]} (${transformLabel[typeKey]}) (회차 ${data["예측회차"]})`;
       card.appendChild(label);
 
-      const value = document.createElement("div");
-      value.className = "value";
-      value.textContent = data["예측값"] || "❌ 없음";
-      card.appendChild(value);
-
-      const note = document.createElement("div");
-      note.className = "note";
-      note.textContent = `블럭: ${data["블럭"]}`;
-      card.appendChild(note);
-
-      const match = document.createElement("div");
-      match.className = "note";
-      match.textContent = `매칭순번: ${data["매칭순번"]}`;
-      card.appendChild(match);
+      const list = document.createElement("ol");
+      for (const match of data["예측값들"]) {
+        const item = document.createElement("li");
+        item.textContent = `${match["값"]} | 블럭: ${match["블럭"]} | 매칭순번: ${match["순번"]}`;
+        list.appendChild(item);
+      }
+      card.appendChild(list);
 
       return card;
     }

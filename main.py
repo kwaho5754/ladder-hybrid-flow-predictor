@@ -39,16 +39,26 @@ def flip_odd_even(block):
         flipped.append(s_flip + c_flip + o)
     return flipped
 
-# ✅ 최근 매칭된 블럭 기준으로 "위줄" 예측값 반환
-def find_flow_match(block, full_data):
+def find_all_matches(block, full_data):
+    matches = []
     block_len = len(block)
     for i in reversed(range(len(full_data) - block_len)):
-        candidate = full_data[i:i+block_len]
+        candidate = full_data[i:i + block_len]
         if candidate == block:
             pred_index = i - 1
             pred = full_data[pred_index] if pred_index >= 0 else "❌ 없음"
-            return pred, ">".join(block), i + 1
-    return "❌ 없음", ">".join(block), -1
+            matches.append({
+                "값": pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+    if not matches:
+        matches.append({
+            "값": "❌ 없음",
+            "블럭": "❌ 없음",
+            "순번": "없음"
+        })
+    return matches
 
 @app.route("/")
 def home():
@@ -74,13 +84,11 @@ def predict():
         else:
             flow = recent_flow
 
-        result, blk, match_index = find_flow_match(flow, all_data)
+        matches = find_all_matches(flow, all_data)
 
         return jsonify({
             "예측회차": round_num,
-            "예측값": result,
-            "블럭": blk,
-            "매칭순번": match_index if match_index > 0 else "❌ 없음"
+            "예측값들": matches
         })
 
     except Exception as e:
