@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>사다리 예측 시스템</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
+    .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: white; box-shadow: 0 0 10px #ccc; }
+    h2 { text-align: center; }
+    .section { margin-bottom: 30px; }
+    .grid-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .card { border: 1px solid #ccc; padding: 15px; flex: 1; min-width: 280px; background: #fefefe; }
+    .label { font-weight: bold; margin-bottom: 10px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>사다리 예측 시스템</h2>
+    <div id="round" class="section"></div>
+    <div class="section">
+      <h3>🔍 처음 매칭된 블럭 결과</h3>
+      <div id="first-match"></div>
+    </div>
+  </div>
+
+  <script>
+    fetch("/predict")
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("round").innerHTML = `<div class="card"><span class="label">예측 회차:</span> ${data["예측회차"]}</div>`;
+        const container = document.getElementById("first-match");
+        let html = "";
+        for (const key of ["3줄", "4줄", "5줄"]) {
+          const info = data["처음매칭"][key];
+          const infoR = data["처음매칭_180도"][key];
+          const infoS = data["처음매칭_대칭"][key];
+          const box = (title, d) => `
+            <div class="card">
+              <span class="label">${title}</span>
+              <div>블럭: ${(d?.블럭 || []).join(" → ") || "(없음)"}</div>
+              <div>상단값: ${d?.상단 || "(없음)"}</div>
+              <div>하단값: ${d?.하단 || "(없음)"}</div>
+              <div>순번: ${d?.순번 || "(없음)"}</div>
+            </div>`;
+          html += `<div class="grid-row">
+            ${box(`✅ ${key} 블럭 첫 매칭`, info)}
+            ${box(`🔄 ${key} 블럭 180도 매칭`, infoR)}
+            ${box(`🪞 ${key} 블럭 대칭 매칭`, infoS)}
+          </div>`;
+        }
+        container.innerHTML = html;
+      })
+      .catch(err => {
+        document.body.innerHTML = `<div class="container"><div class="card">오류 발생: ${err}</div></div>`;
+      });
+  </script>
+</body>
+</html>

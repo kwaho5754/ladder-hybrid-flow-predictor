@@ -1,0 +1,7 @@
+flask
+flask-cors
+requests
+supabase
+python-dotenv
+gunicorn
+pandas
