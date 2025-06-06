@@ -1,4 +1,4 @@
-# ✅ 수정된 main.py - 3줄 블럭, 5방향, 연결제외, 상단값 10개 + top1
+# ✅ 수정된 main.py - 3줄 블럭, 5방향, 연결제외, 상단값 10개 + top1 + 180도 회전은 하단값
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from supabase import create_client, Client
@@ -35,14 +35,14 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_matches_3_only(block, all_data):
+def find_matches_3_only(block, all_data, use_bottom=False):
     matches = []
     for i in range(len(all_data) - 3):
         candidate3 = all_data[i:i+3]
         candidate4 = all_data[i:i+4]
         if candidate3 == block and candidate4 != all_data[:4]:
-            pred_index = i - 1
-            pred = all_data[pred_index] if pred_index >= 0 else "❌ 없음"
+            pred_index = i + 3 if use_bottom else i - 1
+            pred = all_data[pred_index] if 0 <= pred_index < len(all_data) else "❌ 없음"
             matches.append({
                 "값": pred,
                 "블럭": ">".join(block),
@@ -76,7 +76,8 @@ def predict():
         else:
             flow = recent_3
 
-        matches = find_matches_3_only(flow, all_data)
+        use_bottom = "rotate" in mode
+        matches = find_matches_3_only(flow, all_data, use_bottom)
         top1 = Counter([m["값"] for m in matches if m["값"] != "❌ 없음"]).most_common(1)
 
         return jsonify({
