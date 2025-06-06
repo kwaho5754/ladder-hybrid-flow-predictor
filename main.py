@@ -29,30 +29,37 @@ def reverse_name(name):
     return name
 
 def flip_start(block):
-    return [('우' if s == '좌' else '좌') + c + o for s, c, o in map(parse_block, block)]
+    return [
+        ('우' if s == '좌' else '좌') + c + o for s, c, o in map(parse_block, block)
+    ]
 
 def flip_odd_even(block):
-    return [s + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
+    return [
+        s + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)
+    ]
 
-def find_all_first_matches(data, block_sizes, transform=None):
+def find_first_matches_by_mode(data, block_sizes, transform=None):
     recent_blocks = {n: data[0:n] for n in block_sizes}
     used_positions = set()
     results = {}
 
     for size in sorted(block_sizes, reverse=True):
-        recent = recent_blocks[size]
-        match_block = transform(recent) if transform else recent
+        base_block = recent_blocks[size]
+        transformed_block = transform(base_block) if transform else base_block
 
         for i in range(1, len(data) - size):
             if any(pos in used_positions for pos in range(i, i + size)):
                 continue
+
             candidate = data[i:i + size]
             transformed_candidate = transform(candidate) if transform else candidate
-            if transformed_candidate == match_block:
+
+            if transformed_candidate == transformed_block:
                 top = data[i - 1] if i > 0 else "❌ 없음"
                 bottom = data[i + size] if i + size < len(data) else "❌ 없음"
+
                 results[size] = {
-                    "블럭": match_block,
+                    "블럭": " → ".join(transformed_block),
                     "상단": top,
                     "하단": bottom,
                     "순번": i + 1
@@ -61,7 +68,7 @@ def find_all_first_matches(data, block_sizes, transform=None):
                 break
         else:
             results[size] = {
-                "블럭": match_block,
+                "블럭": " → ".join(transformed_block),
                 "상단": "❌ 없음",
                 "하단": "❌ 없음",
                 "순번": "❌"
@@ -82,23 +89,24 @@ def predict():
     try:
         raw = supabase.table(SUPABASE_TABLE).select("*") \
             .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
+
         if not raw:
             return jsonify({"error": "데이터 없음"}), 500
 
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        match_original = find_all_first_matches(all_data, [5, 4, 3])
-        match_sym = find_all_first_matches(all_data, [5, 4, 3], transform=lambda b: [reverse_name(x) for x in b])
-        match_start = find_all_first_matches(all_data, [5, 4, 3], transform=flip_start)
-        match_odd = find_all_first_matches(all_data, [5, 4, 3], transform=flip_odd_even)
+        result_orig = find_first_matches_by_mode(all_data, [5, 4, 3])
+        result_sym = find_first_matches_by_mode(all_data, [5, 4, 3], transform=lambda b: [reverse_name(x) for x in b])
+        result_start = find_first_matches_by_mode(all_data, [5, 4, 3], transform=flip_start)
+        result_odd = find_first_matches_by_mode(all_data, [5, 4, 3], transform=flip_odd_even)
 
         return jsonify({
             "예측회차": round_num,
-            "처음매칭": match_original,
-            "처음매칭_대칭": match_sym,
-            "처음매칭_시작점반전": match_start,
-            "처음매칭_홀짝반전": match_odd
+            "처음매칭": result_orig,
+            "처음매칭_대칭": result_sym,
+            "처음매칭_시작점반전": result_start,
+            "처음매칭_홀짝반전": result_odd
         })
 
     except Exception as e:

@@ -74,7 +74,7 @@
             const formatCard = (title, info) => `
               <div class="card">
                 <span class="label">${title}</span>
-                <div>블럭: <b>${(info?.["블럭"] || []).join(" → ") || "(없음)"}</b></div>
+                <div>블럭: <b>${info?.["블럭"] || "(없음)"}</b></div>
                 <div>상단값: ${info?.["상단"] || "(없음)"}</div>
                 <div>하단값: ${info?.["하단"] || "(없음)"}</div>
                 <div>순번: ${info?.["순번"] || "(없음)"}</div>
