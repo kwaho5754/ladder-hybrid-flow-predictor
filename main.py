@@ -76,8 +76,8 @@ def home():
 def predict():
     try:
         mode = request.args.get("mode", "3block_orig")
-        mode_prefix = mode.split("_")[0]  # e.g., 3block
-        mode_suffix = "_".join(mode.split("_")[1:])  # e.g., flip_full
+        size = int(mode[0])
+        transform = mode.split("_")[1] if "_" in mode else "orig"
 
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
@@ -90,38 +90,39 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        used_indices = set()
-        selected_block = []
-        selected_size = 0
-
-        for size in [6, 5, 4, 3]:
-            for i in range(len(all_data) - size + 1):
-                if any(idx in used_indices for idx in range(i, i + size)):
-                    continue
-                candidate_block = all_data[i:i + size]
-                selected_block = candidate_block
-                selected_size = size
-                used_indices.update(range(i, i + size))
-                break
-            if selected_block:
+        # 최근 흐름에서 블럭 길이만큼 슬라이딩하면서 동일한 블럭만 허용
+        recent_block = []
+        for i in range(len(all_data) - size + 1):
+            block_candidate = all_data[i:i+size]
+            valid = True
+            for j in range(1, size):
+                if all_data[i+j-1][-1] == all_data[i+j][-1]:  # 예시로 홀짝이 동일하면 불연속
+                    valid = False
+                    break
+            if valid:
+                recent_block = block_candidate
                 break
 
-        if mode_suffix == "flip_full":
-            transformed = flip_full(selected_block)
-        elif mode_suffix == "flip_start":
-            transformed = flip_start(selected_block)
-        elif mode_suffix == "flip_odd_even":
-            transformed = flip_odd_even(selected_block)
-        else:
-            transformed = selected_block
+        if not recent_block:
+            return jsonify({
+                "예측회차": round_num,
+                "상단값들": [{"값": "❌ 없음", "블럭": "없음", "순번": "❌"}],
+                "하단값들": [{"값": "❌ 없음", "블럭": "없음", "순번": "❌"}]
+            })
 
-        top, bottom = find_all_matches(transformed, all_data)
+        if transform == "flip_full":
+            recent_block = flip_full(recent_block)
+        elif transform == "flip_start":
+            recent_block = flip_start(recent_block)
+        elif transform == "flip_odd_even":
+            recent_block = flip_odd_even(recent_block)
+
+        top, bottom = find_all_matches(recent_block, all_data)
 
         return jsonify({
             "예측회차": round_num,
             "상단값들": top,
-            "하단값들": bottom,
-            "블럭길이": selected_size
+            "하단값들": bottom
         })
 
     except Exception as e:
