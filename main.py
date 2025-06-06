@@ -25,7 +25,7 @@ def parse_block(s):
 
 def flip_start(block):
     return [
-        ('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + ('짝' if o == '홀' else '홀')
+        ('우' if s == '좌' else '좌') + c + o
         for s, c, o in map(parse_block, block)
     ]
 
