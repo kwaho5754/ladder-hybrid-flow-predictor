@@ -50,13 +50,6 @@
   <div class="container">
     <h2>사다리 예측 시스템</h2>
     <div id="round" class="section"></div>
-
-    <div id="recent3" class="section"></div>
-    <div class="grid-row" id="result3"></div>
-
-    <div id="recent4" class="section"></div>
-    <div class="grid-row" id="result4"></div>
-
     <div class="section">
       <h3>🔍 처음 매칭된 블럭 결과</h3>
       <div id="first-match"></div>
@@ -68,36 +61,6 @@
       .then((res) => res.json())
       .then((data) => {
         document.getElementById("round").innerHTML = `<div class="card"><span class="label">예측 회차:</span> ${data["예측회차"]}</div>`;
-
-        const showRecent = (list, targetId, title) => {
-          const html = list.map((v, i) => `<div>${i + 1} : ${v}</div>`).join("");
-          document.getElementById(targetId).innerHTML = `<div class="card"><span class="label">${title} (최신 → 과거):</span> ${html}</div>`;
-        };
-
-        const showCombinedTop3 = (result, targetId) => {
-          const container = document.getElementById(targetId);
-          container.innerHTML = "";
-
-          const allKeys = Object.keys(result);
-          for (const key of allKeys) {
-            const card = document.createElement("div");
-            card.className = "card";
-
-            const label = document.createElement("div");
-            label.className = "label";
-            label.textContent = key;
-            card.appendChild(label);
-
-            result[key]?.forEach(v => {
-              const div = document.createElement("div");
-              div.className = "value";
-              div.textContent = `${v.value} (${v.count})`;
-              card.appendChild(div);
-            });
-
-            container.appendChild(card);
-          }
-        };
 
         const showFirstMatches = (matches, matchesSym, matchesStart, matchesOdd) => {
           const container = document.getElementById("first-match");
@@ -111,7 +74,7 @@
             const formatCard = (title, info) => `
               <div class="card">
                 <span class="label">${title}</span>
-                <div>블럭: <span style="font-weight:bold">${(info?.["블럭"] || []).join(" → ") || "(없음)"}</span></div>
+                <div>블럭: <b>${(info?.["블럭"] || []).join(" → ") || "(없음)"}</b></div>
                 <div>상단값: ${info?.["상단"] || "(없음)"}</div>
                 <div>하단값: ${info?.["하단"] || "(없음)"}</div>
                 <div>순번: ${info?.["순번"] || "(없음)"}</div>
@@ -121,24 +84,23 @@
               <div class="grid-row">
                 ${formatCard(`✅ ${key} 블럭 원본`, info)}
                 ${formatCard(`🪞 ${key} 블럭 대칭`, infoS)}
-                ${formatCard(`🔁 ${key} 블럭 시작점반전`, infoStart)}
-                ${formatCard(`🌓 ${key} 블럭 홀짝반전`, infoOdd)}
+                ${formatCard(`🔁 ${key} 시작점반전`, infoStart)}
+                ${formatCard(`🌓 ${key} 홀짝반전`, infoOdd)}
               </div>
             `;
           }
           container.innerHTML = html;
         };
 
-        showRecent(data["최근블럭3"], "recent3", "최근 3줄 블럭");
-        showCombinedTop3(data["Top3_3줄"], "result3");
-
-        showRecent(data["최근블럭4"], "recent4", "최근 4줄 블럭");
-        showCombinedTop3(data["Top3_4줄"], "result4");
-
-        showFirstMatches(data["처음매칭"], data["처음매칭_대칭"], data["처음매칭_시작점반전"], data["처음매칭_홀짝반전"]);
+        showFirstMatches(
+          data["처음매칭"],
+          data["처음매칭_대칭"],
+          data["처음매칭_시작점반전"],
+          data["처음매칭_홀짝반전"]
+        );
       })
       .catch((error) => {
-        document.body.innerHTML = `<div class="container"><div class="card">예측 데이터를 불러오는 중 오류 발생: ${error}</div></div>`;
+        document.body.innerHTML = `<div class="container"><div class="card">오류 발생: ${error}</div></div>`;
       });
   </script>
 </body>
