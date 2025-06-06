@@ -1,10 +1,8 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify
 from flask_cors import CORS
 from supabase import create_client, Client
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
@@ -24,71 +22,60 @@ def reverse_name(name):
     name = name.replace('홀', '@').replace('짝', '홀').replace('@', '짝')
     return name
 
-def flip_start(block):
-    return [reverse_name(block[0])] + block[1:] if block else []
+def flip_start(block):  # 시작점 반전
+    return [reverse_name(b[:1]) + b[1:] for b in block]
 
-def flip_odd_even(block):
-    return [reverse_name(b) if b[-1] in ['홀', '짝'] else b for b in block]
+def flip_odd_even(block):  # 홀짝 반전
+    return [b[:-1] + ('짝' if '홀' in b else '홀') if b[-1] in ['홀', '짝'] else b for b in block]
 
-def find_matches_by_size(data, size, transform, used_indices):
-    recent_block = data[0:size]
-    if transform:
-        recent_block = transform(recent_block)
+def analyze_blocks(data, length):
+    used = set()
+    result = {'원본': [], '대칭': [], '시작반전': [], '홀짝반전': []}
+    name_set = {"좌삼짝", "우삼홀", "좌사홀", "우사짝"}
 
-    for i in range(1, len(data) - size):
-        if any(j in used_indices for j in range(i, i + size)):
+    for i in range(len(data) - length):
+        block = [convert(data[j]) for j in range(i, i+length)]
+        top = convert(data[i-1]) if i > 0 else None
+        if not top or any((i+j) in used for j in range(length)):
             continue
-        candidate = data[i:i+size]
-        candidate_transformed = transform(candidate) if transform else candidate
-        if candidate_transformed == recent_block:
-            used_indices.update(range(i, i + size))
-            return {
-                "블럭": candidate_transformed,
-                "상단": data[i - 1] if i > 0 else None,
-                "하단": data[i + size] if i + size < len(data) else None,
-                "순번": i + 1
-            }
-    return None
 
-def find_all_directions(data):
-    directions = {
-        "원본": None,
-        "대칭": lambda b: [reverse_name(x) for x in b],
-        "시작반전": flip_start,
-        "홀짝반전": flip_odd_even
-    }
-    results = {}
-    for label, transform in directions.items():
-        used_indices = set()
-        results[label] = {}
-        for size in [5, 4, 3]:
-            match = find_matches_by_size(data, size, transform, used_indices)
-            if match:
-                results[label][f"{size}줄"] = match
-    return results
+        key = tuple(block)
+        if key not in used:
+            used.update({i+j for j in range(length)})
+            name = top if top in name_set else None
+            if name: result['원본'].append((block, name))
 
-@app.route("/")
-def home():
-    return send_from_directory(os.path.dirname(__file__), "index.html")
+        block_r = block[::-1]
+        key = tuple(block_r)
+        if key not in used:
+            name = top if top in name_set else None
+            if name: result['대칭'].append((block_r, name))
+
+        flipped = flip_start(block)
+        key = tuple(flipped)
+        if key not in used:
+            name = top if top in name_set else None
+            if name: result['시작반전'].append((flipped, name))
+
+        oddflip = flip_odd_even(block)
+        key = tuple(oddflip)
+        if key not in used:
+            name = top if top in name_set else None
+            if name: result['홀짝반전'].append((oddflip, name))
+
+    return result
 
 @app.route("/predict")
 def predict():
-    try:
-        raw = supabase.table(SUPABASE_TABLE).select("*") \
-            .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
+    res = supabase.table(SUPABASE_TABLE).select("*").order("id", desc=True).limit(3000).execute()
+    data = res.data[::-1]  # 최신순 정렬
+    lengths = [5, 4, 3]
+    results = {}
 
-        if not raw:
-            return jsonify({"error": "데이터 없음"}), 500
+    for l in lengths:
+        results[f"{l}줄"] = analyze_blocks(data, l)
 
-        round_num = int(raw[0]["date_round"]) + 1
-        all_data = [convert(d) for d in raw]
-        results = find_all_directions(all_data)
-        results["예측회차"] = round_num
+    return jsonify(results)
 
-        return jsonify(results)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT") or 5000)
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    app.run(debug=True)
