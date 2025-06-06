@@ -1,53 +1,87 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>사다리 예측 시스템</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
-        h2 { margin-top: 40px; }
-        .block-group { display: flex; flex-wrap: wrap; gap: 16px; }
-        .card {
-            background: white; padding: 12px 16px; border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 200px;
-        }
-        .title { font-weight: bold; margin-bottom: 8px; }
-        pre { background: #f9f9f9; padding: 8px; border-radius: 6px; font-size: 14px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사다리 예측 시스템</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    h1 {
+      color: #333;
+    }
+    .section {
+      margin-top: 30px;
+    }
+    .block {
+      background: white;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    }
+    .block h3 {
+      margin-top: 0;
+    }
+    .block pre {
+      background: #f0f0f0;
+      padding: 10px;
+      overflow-x: auto;
+    }
+  </style>
 </head>
 <body>
-    <h1>사다리 예측 결과 (3~5줄 블럭, 4방향)</h1>
-    <div id="content"></div>
+  <h1>사다리 예측 시스템</h1>
+  <div id="recent-blocks" class="section">
+    <h2>최근 블럭</h2>
+    <div id="recent-output"></div>
+  </div>
+  <div id="prediction-output" class="section">
+    <h2>예측 결과</h2>
+  </div>
 
-    <script>
-        fetch("/predict")
-            .then(res => res.json())
-            .then(data => {
-                const container = document.getElementById("content");
-                Object.keys(data).forEach(length => {
-                    const section = document.createElement("div");
-                    section.innerHTML = `<h2>${length} 블럭 예측</h2><div class='block-group'></div>`;
-                    const group = section.querySelector(".block-group");
+  <script>
+    async function fetchPrediction() {
+      try {
+        const response = await fetch('/predict');
+        const data = await response.json();
 
-                    const result = data[length];
-                    Object.keys(result).forEach(direction => {
-                        const top = result[direction];
-                        if (!top || top.length === 0) return;
-                        const card = document.createElement("div");
-                        card.className = "card";
-                        card.innerHTML = `<div class="title">${direction}</div>` +
-                            `<div><strong>예측:</strong> ${top[0][1]}</div>` +
-                            `<pre>${top[0][0].join("\\n")}</pre>`;
-                        group.appendChild(card);
-                    });
+        const predictionDiv = document.getElementById('prediction-output');
+        predictionDiv.innerHTML = '';
 
-                    container.appendChild(section);
-                });
-            })
-            .catch(err => {
-                document.getElementById("content").innerText = "데이터를 불러오지 못했습니다.";
-                console.error(err);
-            });
-    </script>
+        const recentDiv = document.getElementById('recent-output');
+        recentDiv.innerHTML = '';
+
+        // 최근 블럭 표시
+        for (const key of ['recent_blocks_5', 'recent_blocks_4', 'recent_blocks_3']) {
+          if (data[key]) {
+            const div = document.createElement('div');
+            div.className = 'block';
+            div.innerHTML = `<h3>${key.replace('recent_blocks_', '')}줄 블럭</h3><pre>${data[key].join('\n')}</pre>`;
+            recentDiv.appendChild(div);
+          }
+        }
+
+        // 예측 결과 표시
+        for (const key of Object.keys(data)) {
+          if (key.startsWith('predict_')) {
+            const div = document.createElement('div');
+            div.className = 'block';
+            const title = key.replace('predict_', '').toUpperCase();
+            const list = data[key].map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+            div.innerHTML = `<h3>${title}</h3><pre>${list}</pre>`;
+            predictionDiv.appendChild(div);
+          }
+        }
+      } catch (error) {
+        document.getElementById('prediction-output').innerText = '⚠️ 예측 데이터를 불러오는 중 오류 발생';
+      }
+    }
+
+    fetchPrediction();
+  </script>
 </body>
 </html>

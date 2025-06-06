@@ -1,74 +1,81 @@
-from flask import Flask, jsonify, send_from_directory
-from flask_cors import CORS
-from supabase import create_client, Client
-from dotenv import load_dotenv
+# ✅ 사다리 예측 시스템 - 최종 구조 반영 main.py
+
+from flask import Flask, jsonify, render_template
+from supabase import create_client
+from collections import defaultdict
 import os
+from dotenv import load_dotenv
 
-load_dotenv()  # ✅ .env 환경변수 로드
+# ✅ 환경변수 로드
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_TABLE = os.getenv("SUPABASE_TABLE")
 
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
-CORS(app)
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# ✅ 블럭 이름 지정 함수
+def get_block_name(block):
+    s = ''.join(block)
+    return s
 
-def convert(entry):
-    side = '좌' if entry['start_point'] == 'LEFT' else '우'
-    count = str(entry['line_count'])
-    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
-    return f"{side}{count}{oe}"
+# ✅ 대칭, 시작점반전, 홀짝반전
+def transform_block(block, mode):
+    if mode == "original":
+        return block
+    elif mode == "mirror":
+        return [b.replace("좌", "우") if "좌" in b else b.replace("우", "좌") for b in block]
+    elif mode == "start_flip":
+        return [block[0].replace("홀", "짝") if "홀" in block[0] else block[0].replace("짝", "홀")] + block[1:]
+    elif mode == "even_odd_flip":
+        return [b.replace("홀", "짝") if "홀" in b else b.replace("짝", "홀") for b in block]
 
-def reverse_name(name):
-    name = name.replace('좌', '@').replace('우', '좌').replace('@', '우')
-    name = name.replace('홀', '@').replace('짝', '홀').replace('@', '짝')
-    return name
+# ✅ 블럭 분석 함수
+def analyze_blocks(data, block_size):
+    directions = ["original", "mirror", "start_flip", "even_odd_flip"]
+    results = {size: {d: [] for d in directions} for size in [5, 4, 3]}
+    used_ranges = set()
+    recent_blocks = []
 
-def flip_start(block):  # 시작점 반전
-    return [reverse_name(b[:1]) + b[1:] for b in block]
+    for size in [5, 4, 3]:
+        for direction in directions:
+            for i in range(len(data) - size):
+                if any((i + k) in used_ranges for k in range(size)):
+                    continue
+                block = [data[i + k]["result"] for k in range(size)]
+                transformed = transform_block(block, direction)
+                name = get_block_name(transformed)
+                prev_result = data[i - 1]["result"] if i > 0 else "없음"
+                results[size][direction].append({
+                    "index": i,
+                    "block": transformed,
+                    "name": name,
+                    "predict": prev_result
+                })
+                for k in range(size):
+                    used_ranges.add(i + k)
+                break  # ✅ 처음 매칭된 블럭만
 
-def flip_odd_even(block):  # 홀짝 반전
-    return [b[:-1] + ('짝' if '홀' in b else '홀') if b[-1] in ['홀', '짝'] else b for b in block]
+    # 최근 블럭 표시용 (가장 끝에 있는 5줄, 4줄, 3줄 각각 원본)
+    recent_blocks = {
+        size: data[-size:] for size in [5, 4, 3]
+    }
 
-def analyze_blocks(data, length):
-    used = set()
-    result = {'원본': [], '대칭': [], '시작반전': [], '홀짝반전': []}
-    valid = {"좌삼짝", "우삼홀", "좌사홀", "우사짝"}
+    return results, recent_blocks
 
-    for i in range(len(data) - length):
-        block = [convert(data[j]) for j in range(i, i+length)]
-        top = convert(data[i-1]) if i > 0 else None
-        if not top or any((i+j) in used for j in range(length)):
-            continue
-
-        def store(name, transformed, key):
-            if key not in used and name in valid:
-                used.update({i+j for j in range(length)})
-                result[key].append((transformed, name))
-
-        store(top, block, '원본')
-        store(top, block[::-1], '대칭')
-        store(top, flip_start(block), '시작반전')
-        store(top, flip_odd_even(block), '홀짝반전')
-
-    return result
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 @app.route("/predict")
 def predict():
-    res = supabase.table(SUPABASE_TABLE).select("*").order("id", desc=True).limit(3000).execute()
-    data = res.data[::-1]  # 최신순 정렬
-    lengths = [5, 4, 3]
-    results = {}
+    raw_data = supabase.table(SUPABASE_TABLE).select("*") \
+        .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
+    raw_data.reverse()
+    
+    result, recent = analyze_blocks(raw_data, block_size=5)
+    return jsonify({"results": result, "recent_blocks": recent})
 
-    for l in lengths:
-        results[f"{l}줄"] = analyze_blocks(data, l)
-
-    return jsonify(results)
-
-@app.route("/")
-def home():
-    return send_from_directory(os.path.dirname(__file__), "index.html")
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=8000)
