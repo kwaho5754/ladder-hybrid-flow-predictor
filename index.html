@@ -33,11 +33,16 @@
     .error {
       color: red;
     }
+    .predictions {
+      text-align: left;
+      margin-top: 1rem;
+      font-size: 1rem;
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>🧠 머신 예측 결과<br>(최신 블럭 기준)</h1>
+    <h1>🧠 다양한 관점 기반 예측</h1>
     <div id="result">⏳ 예측 중...</div>
   </div>
 
@@ -47,31 +52,29 @@
   </div>
 
   <script>
-    // 예측 결과 가져오기
     fetch("/meta_predict")
       .then(res => res.json())
       .then(data => {
         if (data.error) {
           document.getElementById("result").innerHTML =
-            `<div class="error">❌ 머신 예측 실패: ${data.error}</div>`;
+            `<div class="error">❌ 예측 실패: ${data.error}</div>`;
         } else {
-          const top3 = data.Top3최종예측;
-          document.getElementById("result").innerHTML = `
-            ✅ 예측 회차: ${data.예측회차}<br/>
-            <strong>Top3 예측:</strong><br/>${top3.join(", ")}
-          `;
+          const preds = data.다양한예측값;
+          const html = [`✅ 예측 회차: ${data.예측회차}`];
+          for (const [key, value] of Object.entries(preds)) {
+            html.push(`<strong>${key}</strong>: ${value}`);
+          }
+          document.getElementById("result").innerHTML = `<div class="predictions">${html.join('<br/>')}</div>`;
         }
       })
       .catch(err => {
         document.getElementById("result").innerHTML =
-          `<div class="error">❌ 머신 예측 실패: ${err.message}</div>`;
+          `<div class="error">❌ 예측 실패: ${err.message}</div>`;
       });
 
-    // 최근 블럭 5개 가져오기
     fetch("/latest_blocks")
       .then(res => res.json())
       .then(data => {
-        // 최신값이 맨 왼쪽에 오도록, 서버에서 이미 reverse 처리했으니 그대로 출력
         const blocks = data.blocks;
         document.getElementById("latest-blocks").innerText = blocks.join(" → ");
       })
