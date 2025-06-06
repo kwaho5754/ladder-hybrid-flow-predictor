@@ -1,6 +1,6 @@
 # ✅ 사다리 예측 시스템 - 최종 구조 반영 main.py
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, send_from_directory
 from supabase import create_client
 from collections import defaultdict
 import os
@@ -17,8 +17,7 @@ app = Flask(__name__)
 
 # ✅ 블럭 이름 지정 함수
 def get_block_name(block):
-    s = ''.join(block)
-    return s
+    return ''.join(block)
 
 # ✅ 대칭, 시작점반전, 홀짝반전
 def transform_block(block, mode):
@@ -32,11 +31,11 @@ def transform_block(block, mode):
         return [b.replace("홀", "짝") if "홀" in b else b.replace("짝", "홀") for b in block]
 
 # ✅ 블럭 분석 함수
-def analyze_blocks(data, block_size):
+def analyze_blocks(data):
     directions = ["original", "mirror", "start_flip", "even_odd_flip"]
     results = {size: {d: [] for d in directions} for size in [5, 4, 3]}
     used_ranges = set()
-    recent_blocks = []
+    recent_blocks = {}
 
     for size in [5, 4, 3]:
         for direction in directions:
@@ -55,26 +54,24 @@ def analyze_blocks(data, block_size):
                 })
                 for k in range(size):
                     used_ranges.add(i + k)
-                break  # ✅ 처음 매칭된 블럭만
+                break
 
-    # 최근 블럭 표시용 (가장 끝에 있는 5줄, 4줄, 3줄 각각 원본)
-    recent_blocks = {
-        size: data[-size:] for size in [5, 4, 3]
-    }
+    for size in [5, 4, 3]:
+        recent_blocks[size] = [entry["result"] for entry in data[-size:]]
 
     return results, recent_blocks
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return send_from_directory(os.path.dirname(__file__), "index.html")
 
 @app.route("/predict")
 def predict():
     raw_data = supabase.table(SUPABASE_TABLE).select("*") \
         .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
     raw_data.reverse()
-    
-    result, recent = analyze_blocks(raw_data, block_size=5)
+
+    result, recent = analyze_blocks(raw_data)
     return jsonify({"results": result, "recent_blocks": recent})
 
 if __name__ == '__main__':
