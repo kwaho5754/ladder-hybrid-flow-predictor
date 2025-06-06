@@ -2,86 +2,144 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>사다리 예측 시스템</title>
   <style>
     body {
-      font-family: sans-serif;
-      padding: 20px;
-      background: #f9f9f9;
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f4f4;
+      margin: 0; padding: 0;
     }
-    h1 {
-      color: #333;
+    .container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
     }
     .section {
-      margin-top: 30px;
+      margin-bottom: 30px;
     }
-    .block {
-      background: white;
-      padding: 10px;
+    .grid-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .card {
+      border: 1px solid #ddd;
+      padding: 15px;
+      background: #fafafa;
+      flex: 1;
+      min-width: 280px;
+    }
+    .label {
+      font-weight: bold;
       margin-bottom: 10px;
-      border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+      display: block;
+      color: #333;
     }
-    .block h3 {
-      margin-top: 0;
-    }
-    .block pre {
-      background: #f0f0f0;
-      padding: 10px;
-      overflow-x: auto;
+    .value {
+      margin-left: 15px;
     }
   </style>
 </head>
 <body>
-  <h1>사다리 예측 시스템</h1>
-  <div id="recent-blocks" class="section">
-    <h2>최근 블럭</h2>
-    <div id="recent-output"></div>
-  </div>
-  <div id="prediction-output" class="section">
-    <h2>예측 결과</h2>
+  <div class="container">
+    <h2>사다리 예측 시스템</h2>
+    <div id="round" class="section"></div>
+
+    <div id="recent3" class="section"></div>
+    <div class="grid-row" id="result3"></div>
+
+    <div id="recent4" class="section"></div>
+    <div class="grid-row" id="result4"></div>
+
+    <div class="section">
+      <h3>🔍 처음 매칭된 블럭 결과</h3>
+      <div id="first-match"></div>
+    </div>
   </div>
 
   <script>
-    async function fetchPrediction() {
-      try {
-        const response = await fetch('/predict');
-        const data = await response.json();
+    fetch("/predict")
+      .then((res) => res.json())
+      .then((data) => {
+        document.getElementById("round").innerHTML = `<div class="card"><span class="label">예측 회차:</span> ${data["예측회차"]}</div>`;
 
-        const predictionDiv = document.getElementById('prediction-output');
-        predictionDiv.innerHTML = '';
+        const showRecent = (list, targetId, title) => {
+          const html = list.map((v, i) => `<div>${i + 1} : ${v}</div>`).join("");
+          document.getElementById(targetId).innerHTML = `<div class="card"><span class="label">${title} (최신 → 과거):</span> ${html}</div>`;
+        };
 
-        const recentDiv = document.getElementById('recent-output');
-        recentDiv.innerHTML = '';
+        const showCombinedTop3 = (result, targetId) => {
+          const container = document.getElementById(targetId);
+          container.innerHTML = "";
 
-        // 최근 블럭 표시
-        for (const key of ['recent_blocks_5', 'recent_blocks_4', 'recent_blocks_3']) {
-          if (data[key]) {
-            const div = document.createElement('div');
-            div.className = 'block';
-            div.innerHTML = `<h3>${key.replace('recent_blocks_', '')}줄 블럭</h3><pre>${data[key].join('\n')}</pre>`;
-            recentDiv.appendChild(div);
+          const allKeys = Object.keys(result);
+          for (const key of allKeys) {
+            const card = document.createElement("div");
+            card.className = "card";
+
+            const label = document.createElement("div");
+            label.className = "label";
+            label.textContent = key;
+            card.appendChild(label);
+
+            result[key]?.forEach(v => {
+              const div = document.createElement("div");
+              div.className = "value";
+              div.textContent = `${v.value} (${v.count})`;
+              card.appendChild(div);
+            });
+
+            container.appendChild(card);
           }
-        }
+        };
 
-        // 예측 결과 표시
-        for (const key of Object.keys(data)) {
-          if (key.startsWith('predict_')) {
-            const div = document.createElement('div');
-            div.className = 'block';
-            const title = key.replace('predict_', '').toUpperCase();
-            const list = data[key].map((item, idx) => `${idx + 1}. ${item}`).join('\n');
-            div.innerHTML = `<h3>${title}</h3><pre>${list}</pre>`;
-            predictionDiv.appendChild(div);
+        const showFirstMatches = (matches, matchesSym, matchesStart, matchesOdd) => {
+          const container = document.getElementById("first-match");
+          let html = "";
+          for (const key of ["3줄", "4줄", "5줄"]) {
+            const info = matches[key];
+            const infoS = matchesSym[key];
+            const infoStart = matchesStart[key];
+            const infoOdd = matchesOdd[key];
+
+            const formatCard = (title, info) => `
+              <div class="card">
+                <span class="label">${title}</span>
+                <div>블럭: ${(info?.["블럭"] || []).join(" → ") || "(없음)"}</div>
+                <div>상단값: ${info?.["상단"] || "(없음)"}</div>
+                <div>하단값: ${info?.["하단"] || "(없음)"}</div>
+                <div>순번: ${info?.["순번"] || "(없음)"}</div>
+              </div>`;
+
+            html += `
+              <div class="grid-row">
+                ${formatCard(`✅ ${key} 블럭 원본`, info)}
+                ${formatCard(`🪞 ${key} 블럭 대칭`, infoS)}
+                ${formatCard(`🔁 ${key} 블럭 시작점반전`, infoStart)}
+                ${formatCard(`🌓 ${key} 블럭 홀짝반전`, infoOdd)}
+              </div>
+            `;
           }
-        }
-      } catch (error) {
-        document.getElementById('prediction-output').innerText = '⚠️ 예측 데이터를 불러오는 중 오류 발생';
-      }
-    }
+          container.innerHTML = html;
+        };
 
-    fetchPrediction();
+        showRecent(data["최근블럭3"], "recent3", "최근 3줄 블럭");
+        showCombinedTop3(data["Top3_3줄"], "result3");
+
+        showRecent(data["최근블럭4"], "recent4", "최근 4줄 블럭");
+        showCombinedTop3(data["Top3_4줄"], "result4");
+
+        showFirstMatches(data["처음매칭"], data["처음매칭_대칭"], data["처음매칭_시작점반전"], data["처음매칭_홀짝반전"]);
+      })
+      .catch((error) => {
+        document.body.innerHTML = `<div class="container"><div class="card">예측 데이터를 불러오는 중 오류 발생: ${error}</div></div>`;
+      });
   </script>
 </body>
 </html>

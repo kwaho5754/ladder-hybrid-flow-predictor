@@ -1,80 +1,138 @@
-# ✅ 사다리 예측 시스템 - 최종 구조 반영 main.py
-
 from flask import Flask, jsonify, send_from_directory
-from supabase import create_client
-from collections import defaultdict
-import os
+from flask_cors import CORS
+from supabase import create_client, Client
 from dotenv import load_dotenv
+import os
 
-# ✅ 환경변수 로드
 load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-SUPABASE_TABLE = os.getenv("SUPABASE_TABLE")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
+CORS(app)
 
-# ✅ 블럭 이름 지정 함수
-def get_block_name(block):
-    return ''.join(block)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ✅ 대칭, 시작점반전, 홀짝반전
-def transform_block(block, mode):
-    if mode == "original":
-        return block
-    elif mode == "mirror":
-        return [b.replace("좌", "우") if "좌" in b else b.replace("우", "좌") for b in block]
-    elif mode == "start_flip":
-        return [block[0].replace("홀", "짝") if "홀" in block[0] else block[0].replace("짝", "홀")] + block[1:]
-    elif mode == "even_odd_flip":
-        return [b.replace("홀", "짝") if "홀" in b else b.replace("짝", "홀") for b in block]
+def convert(entry):
+    side = '좌' if entry['start_point'] == 'LEFT' else '우'
+    count = str(entry['line_count'])
+    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
+    return f"{side}{count}{oe}"
 
-# ✅ 블럭 분석 함수
-def analyze_blocks(data):
-    directions = ["original", "mirror", "start_flip", "even_odd_flip"]
-    results = {size: {d: [] for d in directions} for size in [5, 4, 3]}
-    used_ranges = set()
-    recent_blocks = {}
+def reverse_name(name):
+    name = name.replace('좌', '@').replace('우', '좌').replace('@', '우')
+    name = name.replace('홀', '@').replace('짝', '홀').replace('@', '짝')
+    return name
 
-    for size in [5, 4, 3]:
-        for direction in directions:
-            for i in range(len(data) - size):
-                if any((i + k) in used_ranges for k in range(size)):
-                    continue
-                block = [data[i + k]["result"] for k in range(size)]
-                transformed = transform_block(block, direction)
-                name = get_block_name(transformed)
-                prev_result = data[i - 1]["result"] if i > 0 else "없음"
-                results[size][direction].append({
-                    "index": i,
-                    "block": transformed,
-                    "name": name,
-                    "predict": prev_result
-                })
-                for k in range(size):
-                    used_ranges.add(i + k)
+def flip_start(block):
+    return [reverse_name(block[0])] + block[1:] if block else []
+
+def flip_odd_even(block):
+    return [reverse_name(b) if '홀' in b or '짝' in b else b for b in block]
+
+def find_top3(data, block_size):
+    if len(data) < block_size + 1:
+        return {}, []
+
+    recent_block = data[0:block_size]
+
+    directions = {
+        "원본": lambda b: b,
+        "대칭": lambda b: [reverse_name(x) for x in b],
+        "시작점반전": flip_start,
+        "홀짝반전": flip_odd_even,
+    }
+
+    result = {}
+    for name, transform in directions.items():
+        transformed = transform(recent_block)
+        freq = {}
+        for i in range(1, len(data) - block_size):
+            candidate = data[i:i+block_size]
+            if candidate == transformed:
+                top = data[i - 1] if i > 0 else None
+                if top:
+                    freq[top] = freq.get(top, 0) + 1
+        top3 = sorted(freq.items(), key=lambda x: -x[1])[:3]
+        result[name] = [{"value": k, "count": v} for k, v in top3]
+
+    return result, recent_block
+
+def find_all_first_matches(data, block_sizes, transform=None):
+    recent_blocks = {n: transform(data[0:n]) if transform else data[0:n] for n in block_sizes}
+
+    used_positions = set()
+    results = {}
+
+    for size in sorted(block_sizes, reverse=True):
+        recent = recent_blocks[size]
+        for i in range(1, len(data) - size):
+            if any(pos in used_positions for pos in range(i, i + size)):
+                continue
+            candidate = data[i:i+size]
+            if candidate == recent:
+                top = data[i - 1] if i > 0 else None
+                bottom = data[i + size] if i + size < len(data) else None
+
+                display_block = transform(candidate) if transform else candidate
+
+                results[size] = {
+                    "블럭": display_block,
+                    "상단": top,
+                    "하단": bottom,
+                    "순번": i + 1
+                }
+                used_positions.update(range(i, i + size))
                 break
-
-    for size in [5, 4, 3]:
-        recent_blocks[size] = [entry["result"] for entry in data[-size:]]
-
-    return results, recent_blocks
+    return {
+        "3줄": results.get(3),
+        "4줄": results.get(4),
+        "5줄": results.get(5)
+    }
 
 @app.route("/")
-def index():
+def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
 
 @app.route("/predict")
 def predict():
-    raw_data = supabase.table(SUPABASE_TABLE).select("*") \
-        .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
-    raw_data.reverse()
+    try:
+        raw = supabase.table(SUPABASE_TABLE).select("*") \
+            .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
 
-    result, recent = analyze_blocks(raw_data)
-    return jsonify({"results": result, "recent_blocks": recent})
+        if not raw:
+            return jsonify({"error": "데이터 없음"}), 500
+
+        round_num = int(raw[0]["date_round"]) + 1
+        all_data = [convert(d) for d in raw]
+
+        result3, recent3 = find_top3(all_data, 3)
+        result4, recent4 = find_top3(all_data, 4)
+
+        first_matches = find_all_first_matches(all_data, [5, 4, 3])
+        first_matches_sym = find_all_first_matches(
+            all_data, [5, 4, 3],
+            transform=lambda b: [reverse_name(x) for x in b]
+        )
+        first_matches_start = find_all_first_matches(all_data, [5, 4, 3], transform=flip_start)
+        first_matches_odd = find_all_first_matches(all_data, [5, 4, 3], transform=flip_odd_even)
+
+        return jsonify({
+            "예측회차": round_num,
+            "최근블럭3": recent3,
+            "최근블럭4": recent4,
+            "Top3_3줄": result3,
+            "Top3_4줄": result4,
+            "처음매칭": first_matches,
+            "처음매칭_대칭": first_matches_sym,
+            "처음매칭_시작점반전": first_matches_start,
+            "처음매칭_홀짝반전": first_matches_odd
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    import os
-    port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT") or 5000)
+    app.run(host='0.0.0.0', port=port)
