@@ -108,7 +108,12 @@ def predict():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({
+            "예측회차": None,
+            "상단값들": [],
+            "하단값들": [],
+            "error": str(e)
+        })
 
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
