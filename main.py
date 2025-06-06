@@ -48,7 +48,7 @@ def find_matches_3_only(block, all_data, use_bottom=False):
                 "블럭": ">".join(block),
                 "순번": i + 1
             })
-    return sorted(matches, key=lambda x: int(x["순번"]))[:10]
+    return sorted(matches, key=lambda x: int(x["순번"]))[:20]
 
 @app.route("/")
 def home():
