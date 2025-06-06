@@ -34,22 +34,23 @@ def convert(entry):
         return '❌ 없음'
 
 def meta_flow_predict(data):
-    counter = Counter(data[:100])
+    recent = data[:100]
+    counter = Counter(recent)
     total = sum(counter.values())
     score_map = {k: 1 - (v/total)**1.2 for k, v in counter.items()}
     return max(score_map, key=score_map.get)
 
 def low_frequency_predict(data):
-    recent = data[:50]
-    counter = Counter(recent)
+    mid_range = data[50:200]
+    counter = Counter(mid_range)
     total = sum(counter.values())
-    score_map = {k: (1 - (v / total))**1.5 for k, v in counter.items()}
+    score_map = {k: (1 - (v / total))**1.8 for k, v in counter.items()}
     return max(score_map, key=score_map.get)
 
 def reverse_bias_predict(data):
-    recent = data[:30]
+    long_range = data[:1000]
     bias = {'좌': 0, '우': 0, '홀': 0, '짝': 0, '3': 0, '4': 0}
-    for d in recent:
+    for d in long_range:
         if d.startswith('좌'): bias['좌'] += 1
         if d.startswith('우'): bias['우'] += 1
         if '홀' in d: bias['홀'] += 1
@@ -57,23 +58,24 @@ def reverse_bias_predict(data):
         if '3' in d: bias['3'] += 1
         if '4' in d: bias['4'] += 1
     result = ''
-    result += '우' if bias['좌'] > 21 else '좌' if bias['우'] > 21 else '좌'
-    result += '4' if bias['3'] > 21 else '3' if bias['4'] > 21 else '3'
-    result += '짝' if bias['홀'] > 21 else '홀' if bias['짝'] > 21 else '홀'
+    result += '우' if bias['좌'] > bias['우'] else '좌'
+    result += '4' if bias['3'] > bias['4'] else '3'
+    result += '짝' if bias['홀'] > bias['짝'] else '홀'
     return result
 
 def start_position_predict(data):
-    recent = data[:40]
-    left = sum(1 for d in recent if d.startswith('좌'))
-    right = len(recent) - left
+    window = data[100:300]
+    left = sum(1 for d in window if d.startswith('좌'))
+    right = len(window) - left
     return '좌3홀' if left > right else '우4짝'
 
 def periodic_pattern_predict(data):
+    pattern_range = data[200:1000]
     score = Counter()
-    for offset in [5, 13]:
-        for i in range(offset, len(data)):
-            if data[i] == data[i - offset]:
-                score[data[i]] += 1
+    for offset in [5, 13, 21]:
+        for i in range(offset, len(pattern_range)):
+            if pattern_range[i] == pattern_range[i - offset]:
+                score[pattern_range[i]] += 1
     return max(score, key=score.get) if score else '❌ 없음'
 
 @app.route("/")
@@ -89,11 +91,11 @@ def meta_predict():
         all_data = [convert(d) for d in raw][::-1]
 
         diverse_preds = {
-            "흐름 기반": meta_flow_predict(all_data),
-            "희귀 기반": low_frequency_predict(all_data),
-            "편향 반전": reverse_bias_predict(all_data),
             "시작 위치": start_position_predict(all_data),
-            "주기 반복": periodic_pattern_predict(all_data)
+            "주기 반복": periodic_pattern_predict(all_data),
+            "편향 반전": reverse_bias_predict(all_data),
+            "흐름 기반": meta_flow_predict(all_data),
+            "희귀 기반": low_frequency_predict(all_data)
         }
 
         return jsonify({
