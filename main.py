@@ -20,16 +20,25 @@ def convert(entry):
     oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
     return f"{side}{count}{oe}"
 
+def parse_block(s):
+    return s[0], s[1:-1], s[-1]
+
+def flip_start(block):
+    return [
+        ('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + ('짝' if o == '홀' else '홀')
+        for s, c, o in map(parse_block, block)
+    ]
+
+def flip_odd_even(block):
+    return [
+        ('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o
+        for s, c, o in map(parse_block, block)
+    ]
+
 def reverse_name(name):
     name = name.replace('좌', '@').replace('우', '좌').replace('@', '우')
     name = name.replace('홀', '@').replace('짝', '홀').replace('@', '짝')
     return name
-
-def flip_start(block):
-    return [reverse_name(block[0])] + block[1:] if block else []
-
-def flip_odd_even(block):
-    return [reverse_name(b) if '홀' in b or '짝' in b else b for b in block]
 
 def find_top3(data, block_size):
     if len(data) < block_size + 1:
