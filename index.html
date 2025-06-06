@@ -31,9 +31,6 @@
         const container = document.getElementById("first-match");
         let html = "";
         for (const key of ["3줄", "4줄", "5줄"]) {
-          const info = data["처음매칭"][key];
-          const infoR = data["처음매칭_180도"][key];
-          const infoS = data["처음매칭_대칭"][key];
           const box = (title, d) => `
             <div class="card">
               <span class="label">${title}</span>
@@ -43,9 +40,10 @@
               <div>순번: ${d?.순번 || "(없음)"}</div>
             </div>`;
           html += `<div class="grid-row">
-            ${box(`✅ ${key} 블럭 첫 매칭`, info)}
-            ${box(`🔄 ${key} 블럭 180도 매칭`, infoR)}
-            ${box(`🪞 ${key} 블럭 대칭 매칭`, infoS)}
+            ${box(`✅ ${key} 블럭`, data["처음매칭"][key])}
+            ${box(`🪞 ${key} 대칭`, data["처음매칭_대칭"][key])}
+            ${box(`🔁 ${key} 시작반전`, data["처음매칭_시작반전"][key])}
+            ${box(`⚖️ ${key} 홀짝반전`, data["처음매칭_홀짝반전"][key])}
           </div>`;
         }
         container.innerHTML = html;

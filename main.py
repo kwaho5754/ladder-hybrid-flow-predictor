@@ -24,39 +24,30 @@ def reverse_name(name):
     name = name.replace('홀', '@').replace('짝', '홀').replace('@', '짝')
     return name
 
-def rotate_block(block):
-    return list(reversed([reverse_name(b) for b in block]))
+def flip_start(block):
+    return [
+        reverse_name(b) if i == 0 else b
+        for i, b in enumerate(block)
+    ]
 
-def find_all_first_matches(data, block_sizes, rotate=False, transform=None):
-    if transform:
-        recent_blocks = {n: transform(data[0:n]) for n in block_sizes}
-    elif rotate:
-        recent_blocks = {n: rotate_block(data[0:n]) for n in block_sizes}
-    else:
-        recent_blocks = {n: data[0:n] for n in block_sizes}
+def flip_odd_even(block):
+    return [
+        reverse_name(b) if b[-1] in ['홀', '짝'] else b
+        for b in block
+    ]
 
+def find_all_first_matches(data, block_sizes, transform=None):
+    recent_blocks = {n: transform(data[0:n]) if transform else data[0:n] for n in block_sizes}
     results = {}
     for size in sorted(block_sizes, reverse=True):
         recent = recent_blocks[size]
         for i in range(1, len(data) - size):
             candidate = data[i:i+size]
-            # 🔍 매칭 기준에 맞게 변환 적용
-            if rotate:
-                candidate_transformed = rotate_block(candidate)
-            elif transform:
-                candidate_transformed = transform(candidate)
-            else:
-                candidate_transformed = candidate
-            if candidate_transformed == recent:
+            transformed = transform(candidate) if transform else candidate
+            if transformed == recent:
                 top = data[i - 1] if i > 0 else None
                 bottom = data[i + size] if i + size < len(data) else None
-                # 🔄 출력용 블럭은 다시 원래 방향으로 되돌림
-                if rotate:
-                    display_block = rotate_block(candidate)
-                elif transform:
-                    display_block = transform(candidate)
-                else:
-                    display_block = candidate
+                display_block = candidate
                 results[size] = {
                     "블럭": display_block,
                     "상단": top,
@@ -84,16 +75,15 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
         first_matches = find_all_first_matches(all_data, [5, 4, 3])
-        first_matches_r = find_all_first_matches(all_data, [5, 4, 3], rotate=True)
-        first_matches_sym = find_all_first_matches(
-            all_data, [5, 4, 3],
-            transform=lambda b: [reverse_name(x) for x in b]
-        )
+        first_matches_sym = find_all_first_matches(all_data, [5, 4, 3], transform=lambda b: [reverse_name(x) for x in b])
+        first_matches_start = find_all_first_matches(all_data, [5, 4, 3], transform=flip_start)
+        first_matches_odd = find_all_first_matches(all_data, [5, 4, 3], transform=flip_odd_even)
         return jsonify({
             "예측회차": round_num,
             "처음매칭": first_matches,
-            "처음매칭_180도": first_matches_r,
-            "처음매칭_대칭": first_matches_sym
+            "처음매칭_대칭": first_matches_sym,
+            "처음매칭_시작반전": first_matches_start,
+            "처음매칭_홀짝반전": first_matches_odd
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
