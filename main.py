@@ -67,10 +67,10 @@ def find_top3(data, block_size):
 
 def find_all_first_matches(data, block_sizes, transform=None):
     recent_blocks = {n: data[0:n] for n in block_sizes}
-    used_positions = set()
     results = {}
 
     for size in sorted(block_sizes, reverse=True):
+        used_positions = set()  # 🔥 위치 이동하여 블럭 유형별 분리
         recent = recent_blocks[size]
         match_target = transform(recent) if transform else recent
 
@@ -82,15 +82,15 @@ def find_all_first_matches(data, block_sizes, transform=None):
             if transformed_candidate == match_target:
                 top = data[i - 1] if i > 0 else "(없음)"
                 bottom = data[i + size] if i + size < len(data) else "(없음)"
-                display_block = match_target
                 results[size] = {
-                    "블럭": display_block,
+                    "블럭": match_target,  # 🔥 변형된 블럭을 그대로 표시
                     "상단": top,
                     "하단": bottom,
                     "순번": i + 1
                 }
                 used_positions.update(range(i, i + size))
                 break
+
     return {
         "3줄": results.get(3),
         "4줄": results.get(4),
