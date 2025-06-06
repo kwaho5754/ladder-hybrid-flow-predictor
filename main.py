@@ -1,3 +1,4 @@
+# ✅ 수정된 main.py - 3줄 블럭, 5방향, 연결제외, 상단값 10개 + top1
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from supabase import create_client, Client
@@ -34,39 +35,20 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data):
-    top_matches = []
-    bottom_matches = []
-    block_len = len(block)
-
-    for i in reversed(range(len(full_data) - block_len)):
-        candidate = full_data[i:i + block_len]
-        if candidate == block:
-            top_index = i - 1
-            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            top_matches.append({
-                "값": top_pred,
+def find_matches_3_only(block, all_data):
+    matches = []
+    for i in range(len(all_data) - 3):
+        candidate3 = all_data[i:i+3]
+        candidate4 = all_data[i:i+4]
+        if candidate3 == block and candidate4 != all_data[:4]:
+            pred_index = i - 1
+            pred = all_data[pred_index] if pred_index >= 0 else "❌ 없음"
+            matches.append({
+                "값": pred,
                 "블럭": ">".join(block),
                 "순번": i + 1
             })
-
-            bottom_index = i + block_len
-            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-            bottom_matches.append({
-                "값": bottom_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
-
-    if not top_matches:
-        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-    if not bottom_matches:
-        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-
-    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
-    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
-
-    return top_matches, bottom_matches
+    return sorted(matches, key=lambda x: int(x["순번"]))[:10]
 
 @app.route("/")
 def home():
@@ -76,82 +58,32 @@ def home():
 def predict():
     try:
         mode = request.args.get("mode", "3block_orig")
-        size = int(mode[0])
-
-        response = supabase.table(SUPABASE_TABLE) \
-            .select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(3000) \
-            .execute()
+        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
 
         raw = response.data
-        round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
-        recent_flow = all_data[:size]
+        round_num = int(raw[0]["date_round"]) + 1
+        recent_3 = all_data[:3]
 
         if "flip_full" in mode:
-            flow = flip_full(recent_flow)
+            flow = flip_full(recent_3)
         elif "flip_start" in mode:
-            flow = flip_start(recent_flow)
+            flow = flip_start(recent_3)
         elif "flip_odd_even" in mode:
-            flow = flip_odd_even(recent_flow)
+            flow = flip_odd_even(recent_3)
+        elif "rotate" in mode:
+            flow = list(reversed(recent_3))
         else:
-            flow = recent_flow
+            flow = recent_3
 
-        top, bottom = find_all_matches(flow, all_data)
+        matches = find_matches_3_only(flow, all_data)
+        top1 = Counter([m["값"] for m in matches if m["값"] != "❌ 없음"]).most_common(1)
 
         return jsonify({
             "예측회차": round_num,
-            "상단값들": top,
-            "하단값들": bottom
+            "상단값들": matches,
+            "top1": top1[0][0] if top1 else "❌ 없음"
         })
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/predict_top3_summary")
-def predict_top3_summary():
-    try:
-        from itertools import chain
-        response = supabase.table(SUPABASE_TABLE) \
-            .select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(3000) \
-            .execute()
-
-        raw = response.data
-        all_data = [convert(d) for d in raw]
-
-        result = {}
-
-        for size in [3, 4]:  # 3줄 + 4줄 블럭 포함
-            recent_block = all_data[:size]
-            transform_modes = {
-                "flip_full": flip_full,
-                "flip_start": flip_start,
-                "flip_odd_even": flip_odd_even
-            }
-
-            top_values = []
-            bottom_values = []
-
-            for fn in transform_modes.values():
-                flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data)
-                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
-                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
-
-            top_counter = Counter(top_values)
-            bottom_counter = Counter(bottom_values)
-
-            result[f"{size}줄 블럭 Top3 요약"] = {
-                "Top3상단": [v[0] for v in top_counter.most_common(3)],
-                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
-            }
-
-        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": str(e)})
