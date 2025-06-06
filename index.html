@@ -45,9 +45,6 @@
   </div>
 
   <script>
-    // Unicode 한글 디코딩 함수
-    const decodeUnicode = (str) => decodeURIComponent(escape(str));
-
     fetch("/meta_predict")
       .then(res => res.json())
       .then(data => {
@@ -55,7 +52,7 @@
           document.getElementById("result").innerHTML =
             `<div class="error">❌ 머신 예측 실패: ${data.error}</div>`;
         } else {
-          const top3 = data.Top3최종예측.map(decodeUnicode);
+          const top3 = data.Top3최종예측;
           document.getElementById("result").innerHTML = `
             ✅ 예측 회차: ${data.예측회차}<br/>
             <strong>Top3 예측:</strong><br/>${top3.join(", ")}
@@ -70,7 +67,7 @@
     fetch("/latest_blocks")
       .then(res => res.json())
       .then(data => {
-        const blocks = data.blocks.map(decodeUnicode);
+        const blocks = data.blocks;
         document.getElementById("latest-blocks").innerText = blocks.join(" → ");
       })
       .catch(() => {
