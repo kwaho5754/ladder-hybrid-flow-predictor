@@ -4,6 +4,9 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
 from collections import Counter, defaultdict
+import numpy as np
+import pandas as pd
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 load_dotenv()
 
@@ -45,6 +48,7 @@ def normalize(value):
     if '우4짝' in value: return '우사짝'
     return '❌ 없음'
 
+# 기존 10개 모델 함수 (예시)
 def meta_flow_predict(data):
     counter = Counter(data[:100])
     total = sum(counter.values())
@@ -125,10 +129,42 @@ def block_tail_predict(data):
     counter = Counter(tail)
     return counter.most_common(1)[0][0] if counter else '❌ 없음'
 
+# 1) 변화 탐지 함수
+def detect_anomaly(data, window=20, threshold=0.3):
+    try:
+        values = np.array([hash(d) % 100 for d in data])
+        if len(values) < window:
+            return False
+        rolling_std = np.std(values[-window:])
+        return rolling_std > threshold
+    except Exception as e:
+        print(f"Error in detect_anomaly: {e}")
+        return False
+
+# 3) 특이점 탐색용 예측 함수
+def anomaly_focused_predict(data):
+    if detect_anomaly(data):
+        counter = Counter(data[-50:])
+        rare = [k for k, v in counter.items() if v < 3]
+        return rare if rare else ['❌ 없음']
+    return ['❌ 없음']
+
+# 5) 시계열 분해 함수
+def decompose_timeseries(data):
+    try:
+        values = [hash(d) % 100 for d in data]
+        series = pd.Series(values)
+        result = seasonal_decompose(series, model='additive', period=12, extrapolate_trend='freq')
+        residuals = result.resid.dropna()
+        return residuals.tolist()
+    except Exception as e:
+        print(f"Error in decompose_timeseries: {e}")
+        return []
+
 PRIORITY = {'좌삼짝': 0, '우삼홀': 1, '좌사홀': 2, '우사짝': 3, '❌ 없음': 99}
 
 def fixed_top3(predictions):
-    norm = [normalize(p) for p in predictions]
+    norm = [normalize(p) for p in predictions if p != '❌ 없음']
     count = Counter(norm)
     sorted_items = sorted(count.items(), key=lambda x: (-x[1], PRIORITY.get(x[0], 99)))
     return [item[0] for item in sorted_items[:3]]
@@ -143,10 +179,13 @@ def meta_predict():
         response = supabase.table(SUPABASE_TABLE).select("*")\
             .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
         raw = response.data
-        # 반대로 뒤집기: 과거 → 최신 순서로 분석하도록
         all_data = [convert(d) for d in raw][::-1]
-        round_num = int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999
-        predictions = [
+
+        anomaly_flag = detect_anomaly(all_data)
+        anomaly_preds = anomaly_focused_predict(all_data)
+        residuals = decompose_timeseries(all_data)
+
+        base_preds = [
             meta_flow_predict(all_data),
             periodic_pattern_predict(all_data),
             even_line_predict(all_data),
@@ -158,10 +197,18 @@ def meta_predict():
             odd_even_flow_predict(all_data),
             block_tail_predict(all_data),
         ]
-        top3_final = fixed_top3(predictions)
+
+        # anomaly_focused_predict가 의미있는 결과면 추가
+        if anomaly_preds != ['❌ 없음']:
+            base_preds.extend(anomaly_preds)
+
+        top3_final = fixed_top3(base_preds)
+
         return jsonify({
-            "예측회차": round_num,
-            "Top3최종예측": top3_final
+            "예측회차": int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999,
+            "Top3최종예측": top3_final,
+            "변화감지": anomaly_flag,
+            "잔차분석": residuals[:10],  # 잔차 일부만 샘플로 반환
         })
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -172,7 +219,6 @@ def latest_blocks():
         response = supabase.table(SUPABASE_TABLE).select("*")\
             .order("reg_date", desc=True).order("date_round", desc=True).limit(5).execute()
         raw = response.data
-        # 반대로 뒤집기: 최근값이 맨 앞(왼쪽)에 오도록
         blocks = [convert(d) for d in raw][::-1]
         return jsonify({"blocks": blocks})
     except Exception as e:
