@@ -1,133 +1,161 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import uvicorn
-import requests
-import os
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
+from supabase import create_client, Client
 from dotenv import load_dotenv
-from collections import defaultdict
+import os
+from collections import Counter
 
 load_dotenv()
 
-app = FastAPI()
+app = Flask(__name__)
+CORS(app)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 
-BLOCK_SIZES = [6, 5, 4, 3]
-DIRECTIONS = ["original", "symmetric", "start_flip", "parity_flip"]
-MAX_MATCHES = 12
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 블럭 변형 함수들
-def get_symmetric(block):
-    return [line[::-1] for line in block]
+def convert(entry):
+    side = '좌' if entry['start_point'] == 'LEFT' else '우'
+    count = str(entry['line_count'])
+    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
+    return f"{side}{count}{oe}"
 
-def get_start_flip(block):
-    return [
-        ('짝' if line[0] == '홀' else '홀') + line[1:] for line in block
-    ]
+def parse_block(s):
+    return s[0], s[1:-1], s[-1]
 
-def get_parity_flip(block):
-    return [
-        line[0] + ('짝' if line[1] == '홀' else '홀') for line in block
-    ]
+def flip_full(block):
+    return [('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
 
-def transform_block(block, mode):
-    if mode == "original":
-        return block
-    elif mode == "symmetric":
-        return get_symmetric(block)
-    elif mode == "start_flip":
-        return get_start_flip(block)
-    elif mode == "parity_flip":
-        return get_parity_flip(block)
-    return block
+def flip_start(block):
+    return [s + ('4' if c == '3' else '3') + ('홀' if o == '짝' else '짝') for s, c, o in map(parse_block, block)]
 
-def block_name(block):
-    return ">".join(block)
+def flip_odd_even(block):
+    return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def check_overlap(used, start, end):
-    return any(i in used for i in range(start, end))
+def find_all_matches(block, full_data):
+    top_matches = []
+    bottom_matches = []
+    block_len = len(block)
 
-@app.get("/predict")
+    for i in reversed(range(len(full_data) - block_len)):
+        candidate = full_data[i:i + block_len]
+        if candidate == block:
+            top_index = i - 1
+            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
+            top_matches.append({
+                "값": top_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+            bottom_index = i + block_len
+            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
+            bottom_matches.append({
+                "값": bottom_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+    if not top_matches:
+        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+    if not bottom_matches:
+        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+
+    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+
+    return top_matches, bottom_matches
+
+@app.route("/")
+def home():
+    return send_from_directory(os.path.dirname(__file__), "index.html")
+
+@app.route("/predict")
 def predict():
-    url = os.getenv("SUPABASE_URL") + "/rest/v1/ladder?select=odd_even&order=id.desc&limit=3000"
-    headers = {"apikey": os.getenv("SUPABASE_KEY")}
-    response = requests.get(url, headers=headers)
-    data = response.json()
-    lines = [d['odd_even'] for d in data if 'odd_even' in d and len(d['odd_even']) == 2]
+    try:
+        mode = request.args.get("mode", "3block_orig")
+        size = int(mode[0])
 
-    results = defaultdict(lambda: defaultdict(list))
-    used_indexes = set()
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
 
-    for size in BLOCK_SIZES:
-        for mode in DIRECTIONS:
-            transformed_blocks = {}
+        raw = response.data
+        round_num = int(raw[0]["date_round"]) + 1
+        all_data = [convert(d) for d in raw]
+        recent_flow = all_data[:size]
 
-            for i in range(len(lines) - size):
-                if i in used_indexes:
-                    continue
-                block = lines[i:i+size]
-                transformed = transform_block(block, mode)
-                key = block_name(transformed)
+        if "flip_full" in mode:
+            flow = flip_full(recent_flow)
+        elif "flip_start" in mode:
+            flow = flip_start(recent_flow)
+        elif "flip_odd_even" in mode:
+            flow = flip_odd_even(recent_flow)
+        else:
+            flow = recent_flow
 
-                if key not in transformed_blocks:
-                    transformed_blocks[key] = []
-                transformed_blocks[key].append(i)
+        top, bottom = find_all_matches(flow, all_data)
 
-            latest_block_raw = lines[0:size]
-            latest_block = transform_block(latest_block_raw, mode)
-            latest_key = block_name(latest_block)
+        return jsonify({
+            "예측회차": round_num,
+            "상단값들": top,
+            "하단값들": bottom
+        })
 
-            matches = []
-            for idx in transformed_blocks.get(latest_key, []):
-                if idx == 0 or check_overlap(used_indexes, idx, idx+size):
-                    continue
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
-                upper = lines[idx - 1] if idx - 1 >= 0 else "❌ 없음"
-                lower = lines[idx + size] if idx + size < len(lines) else "❌ 없음"
+@app.route("/predict_top3_summary")
+def predict_top3_summary():
+    try:
+        from itertools import chain
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
 
-                results[size][mode].append({
-                    "index": idx,
-                    "block": latest_block,
-                    "name": latest_key,
-                    "upper": upper,
-                    "lower": lower
-                })
+        raw = response.data
+        all_data = [convert(d) for d in raw]
 
-                for j in range(idx, idx + size):
-                    used_indexes.add(j)
+        result = {}
 
-                if len(results[size][mode]) >= MAX_MATCHES:
-                    break
+        for size in [3, 4]:  # 3줄 + 4줄 블럭 포함
+            recent_block = all_data[:size]
+            transform_modes = {
+                "flip_full": flip_full,
+                "flip_start": flip_start,
+                "flip_odd_even": flip_odd_even
+            }
 
-    output = {"상단값들": [], "하단값들": []}
-    for size in BLOCK_SIZES:
-        for mode in DIRECTIONS:
-            for match in results[size][mode]:
-                output["상단값들"].append({
-                    "값": match['upper'],
-                    "블럭": match['name'],
-                    "순번": match['index']
-                })
-                output["하단값들"].append({
-                    "값": match['lower'],
-                    "블럭": match['name'],
-                    "순번": match['index']
-                })
+            top_values = []
+            bottom_values = []
 
-    while len(output["상단값들"]) < MAX_MATCHES:
-        output["상단값들"].append({"값": "❌ 없음", "블럭": "❌ 없음", "순번": "❌"})
-    while len(output["하단값들"]) < MAX_MATCHES:
-        output["하단값들"].append({"값": "❌ 없음", "블럭": "❌ 없음", "순번": "❌"})
+            for fn in transform_modes.values():
+                flow = fn(recent_block)
+                top, bottom = find_all_matches(flow, all_data)
+                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
+                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
-    return JSONResponse(content=output)
+            top_counter = Counter(top_values)
+            bottom_counter = Counter(bottom_values)
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+            result[f"{size}줄 블럭 Top3 요약"] = {
+                "Top3상단": [v[0] for v in top_counter.most_common(3)],
+                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
+            }
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT") or 5000)
+    app.run(host='0.0.0.0', port=port)
