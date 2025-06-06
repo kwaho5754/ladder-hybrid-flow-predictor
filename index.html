@@ -26,25 +26,34 @@
       const container = document.getElementById("results");
       container.innerHTML = "";
 
-      const results = data["블럭예측결과"] || [];
-      for (const item of results) {
-        const card = document.createElement("div");
-        card.className = "card";
+      function addSection(titleText, items) {
+        const sectionTitle = document.createElement("h2");
+        sectionTitle.textContent = titleText;
+        sectionTitle.style.width = "100%";
+        container.appendChild(sectionTitle);
 
-        const title = document.createElement("h3");
-        title.textContent = `${item["블럭길이"]}줄 블럭 (시작줄 ${item["시작줄"]})`;
-        card.appendChild(title);
+        for (const item of items) {
+          const card = document.createElement("div");
+          card.className = "card";
 
-        const block = document.createElement("p");
-        block.textContent = `블럭: ${item["블럭"]}`;
-        card.appendChild(block);
+          const title = document.createElement("h3");
+          title.textContent = `순번: ${item["순번"]}`;
+          card.appendChild(title);
 
-        const predict = document.createElement("p");
-        predict.textContent = `예측값: ${item["예측값"]}`;
-        card.appendChild(predict);
+          const block = document.createElement("p");
+          block.textContent = `블럭: ${item["블럭"]}`;
+          card.appendChild(block);
 
-        container.appendChild(card);
+          const predict = document.createElement("p");
+          predict.textContent = `예측값: ${item["값"]}`;
+          card.appendChild(predict);
+
+          container.appendChild(card);
+        }
       }
+
+      addSection("🔼 상단 예측값", data["상단값들"] || []);
+      addSection("🔽 하단 예측값", data["하단값들"] || []);
     }
 
     loadPrediction();
