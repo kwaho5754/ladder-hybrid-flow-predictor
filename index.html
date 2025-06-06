@@ -2,66 +2,80 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>머신 예측 결과</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>사다리 머신 예측</title>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f0f4fc;
-      color: #111;
+      font-family: 'Pretendard', sans-serif;
+      background: #f9f9f9;
       padding: 2rem;
+      color: #333;
       text-align: center;
     }
     .card {
       background: white;
-      padding: 1.5rem;
       border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      padding: 1.5rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      margin: 1rem auto;
       max-width: 500px;
-      margin: 2rem auto;
     }
     h1 {
-      font-size: 1.5rem;
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
     }
-    .result {
-      margin-top: 1.2rem;
-      font-size: 1.1rem;
-      text-align: left;
+    .block-list {
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
     }
-    .highlight {
-      color: crimson;
-      font-weight: bold;
+    .error {
+      color: red;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>🧠 머신 예측 결과 (최신 블럭 기준)</h1>
-    <div class="result" id="result">불러오는 중...</div>
+    <h1>🧠 머신 예측 결과<br>(최신 블럭 기준)</h1>
+    <div id="result">⏳ 예측 중...</div>
+  </div>
+
+  <div class="card">
+    <h1>📦 최근 블럭 5개</h1>
+    <div class="block-list" id="latest-blocks">불러오는 중...</div>
   </div>
 
   <script>
-    async function fetchPrediction() {
-      try {
-        const blockRes = await fetch("http://localhost:5000/latest_blocks");
-        const blockData = await blockRes.json();
-        const recent = blockData.recent;
+    // Unicode 한글 디코딩 함수
+    const decodeUnicode = (str) => decodeURIComponent(escape(str));
 
-        const mlRes = await fetch(`http://localhost:5000/ml_predict?recent=${encodeURIComponent(recent)}`);
-        const mlData = await mlRes.json();
+    fetch("/meta_predict")
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          document.getElementById("result").innerHTML =
+            `<div class="error">❌ 머신 예측 실패: ${data.error}</div>`;
+        } else {
+          const top3 = data.Top3최종예측.map(decodeUnicode);
+          document.getElementById("result").innerHTML = `
+            ✅ 예측 회차: ${data.예측회차}<br/>
+            <strong>Top3 예측:</strong><br/>${top3.join(", ")}
+          `;
+        }
+      })
+      .catch(err => {
+        document.getElementById("result").innerHTML =
+          `<div class="error">❌ 머신 예측 실패: ${err.message}</div>`;
+      });
 
-        const container = document.getElementById("result");
-        container.innerHTML = `
-          <p><strong>📅 예측 회차:</strong> ${mlData.회차}</p>
-          <p><strong>🧠 Top3_ML:</strong> <span class="highlight">${mlData.Top3_ML.join(", ")}</span></p>
-          <p><strong>📊 예측값들:</strong> ${mlData.예측값들.join(", ")}</p>
-        `;
-      } catch (e) {
-        document.getElementById("result").innerText = "❌ 머신 예측 실패: " + e;
-      }
-    }
-
-    fetchPrediction();
+    fetch("/latest_blocks")
+      .then(res => res.json())
+      .then(data => {
+        const blocks = data.blocks.map(decodeUnicode);
+        document.getElementById("latest-blocks").innerText = blocks.join(" → ");
+      })
+      .catch(() => {
+        document.getElementById("latest-blocks").innerText = "❌ 블럭 불러오기 실패";
+      });
   </script>
 </body>
 </html>
