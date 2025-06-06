@@ -25,24 +25,27 @@ def reverse_name(name):
     return name
 
 def flip_start(block):
-    return [reverse_name(b) if i == 0 else b for i, b in enumerate(block)]
+    return [reverse_name(block[0])] + block[1:] if block else []
 
 def flip_odd_even(block):
     return [reverse_name(b) if b[-1] in ['홀', '짝'] else b for b in block]
 
-def find_matches(data, block_sizes, transform=None):
+def find_directional_matches(data, block_sizes, transform=None):
     used = set()
     result = {}
     for size in sorted(block_sizes, reverse=True):
-        recent_block = transform(data[:size]) if transform else data[:size]
+        recent_block = data[0:size]
+        if transform:
+            recent_block = transform(recent_block)
         for i in range(1, len(data) - size):
             if any(j in used for j in range(i, i + size)):
                 continue
             candidate = data[i:i+size]
-            candidate_transformed = transform(candidate) if transform else candidate
-            if candidate_transformed == recent_block:
+            if transform:
+                candidate = transform(candidate)
+            if candidate == recent_block:
                 result[f"{size}줄"] = {
-                    "블럭": candidate_transformed,
+                    "블럭": candidate,
                     "상단": data[i - 1] if i > 0 else None,
                     "하단": data[i + size] if i + size < len(data) else None,
                     "순번": i + 1
@@ -73,8 +76,9 @@ def predict():
         }
 
         result = {"예측회차": round_num}
+
         for key, transform in modes.items():
-            result[key] = find_matches(all_data, [5, 4, 3], transform)
+            result[key] = find_directional_matches(all_data, [5, 4, 3], transform)
 
         return jsonify(result)
     except Exception as e:
