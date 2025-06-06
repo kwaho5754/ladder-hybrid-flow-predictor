@@ -16,6 +16,8 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+used_indices_global = set()  # 중복 방지를 위한 전역 집합
+
 def convert(entry):
     side = '좌' if entry['start_point'] == 'LEFT' else '우'
     count = str(entry['line_count'])
@@ -34,15 +36,42 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_first_match(block, full_data):
+def find_all_matches(block, full_data):
+    top_matches = []
+    bottom_matches = []
     block_len = len(block)
+
     for i in reversed(range(len(full_data) - block_len)):
+        if any(idx in used_indices_global for idx in range(i, i + block_len)):
+            continue
+
         candidate = full_data[i:i + block_len]
         if candidate == block:
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            return top_pred
-    return "❌ 없음"
+            top_matches.append({
+                "값": top_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+            bottom_index = i + block_len
+            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
+            bottom_matches.append({
+                "값": bottom_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+            used_indices_global.update(range(i, i + block_len))  # 이 블럭의 인덱스를 전역으로 기록
+            break  # 가장 처음 매칭된 하나만
+
+    if not top_matches:
+        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+    if not bottom_matches:
+        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+
+    return top_matches, bottom_matches
 
 @app.route("/")
 def home():
@@ -51,6 +80,9 @@ def home():
 @app.route("/predict")
 def predict():
     try:
+        mode = request.args.get("mode", "3block_orig")
+        size = int(mode[0])
+
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -61,30 +93,72 @@ def predict():
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
+        recent_flow = all_data[:size]
 
-        used_indices = set()
-        results = []
+        if "flip_full" in mode:
+            flow = flip_full(recent_flow)
+        elif "flip_start" in mode:
+            flow = flip_start(recent_flow)
+        elif "flip_odd_even" in mode:
+            flow = flip_odd_even(recent_flow)
+        else:
+            flow = recent_flow
 
-        for size in [6, 5, 4, 3]:
-            for i in range(len(all_data) - size + 1):
-                if any(idx in used_indices for idx in range(i, i + size)):
-                    continue
-
-                block = all_data[i:i + size]
-                pred = find_first_match(block, all_data)
-                results.append({
-                    "블럭길이": size,
-                    "시작줄": i,
-                    "블럭": ">".join(block),
-                    "예측값": pred
-                })
-                used_indices.update(range(i, i + size))
-                break  # 다음 블럭 길이로 넘어감
+        global used_indices_global
+        used_indices_global = set()  # 요청마다 초기화
+        top, bottom = find_all_matches(flow, all_data)
 
         return jsonify({
             "예측회차": round_num,
-            "블럭예측결과": results
+            "상단값들": top,
+            "하단값들": bottom
         })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/predict_top3_summary")
+def predict_top3_summary():
+    try:
+        from itertools import chain
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
+        raw = response.data
+        all_data = [convert(d) for d in raw]
+
+        result = {}
+
+        for size in [3, 4]:  # 3줄 + 4줄 블럭 포함
+            recent_block = all_data[:size]
+            transform_modes = {
+                "flip_full": flip_full,
+                "flip_start": flip_start,
+                "flip_odd_even": flip_odd_even
+            }
+
+            top_values = []
+            bottom_values = []
+
+            for fn in transform_modes.values():
+                flow = fn(recent_block)
+                top, bottom = find_all_matches(flow, all_data)
+                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
+                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
+
+            top_counter = Counter(top_values)
+            bottom_counter = Counter(bottom_values)
+
+            result[f"{size}줄 블럭 Top3 요약"] = {
+                "Top3상단": [v[0] for v in top_counter.most_common(3)],
+                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
+            }
+
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": str(e)})
