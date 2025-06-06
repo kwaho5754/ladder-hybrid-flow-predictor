@@ -6,6 +6,7 @@ import os
 from collections import Counter
 
 load_dotenv()
+
 app = Flask(__name__)
 CORS(app)
 
@@ -34,27 +35,34 @@ def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
 def find_all_matches(block, full_data, used_indices):
-    top_matches, bottom_matches = [], []
+    top_matches = []
+    bottom_matches = []
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
-        if any(j in used_indices for j in range(i, i + block_len)):
-            continue  # 이미 사용된 인덱스는 스킵
+        # 블럭 범위가 이미 사용되었으면 skip
+        if any(i + offset in used_indices for offset in range(block_len)):
+            continue
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
-            used_indices.update(range(i, i + block_len))
+            for offset in range(block_len):
+                used_indices.add(i + offset)
 
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
             top_matches.append({
-                "값": top_pred, "블럭": ">".join(block), "순번": i + 1
+                "값": top_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
             })
 
             bottom_index = i + block_len
             bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
             bottom_matches.append({
-                "값": bottom_pred, "블럭": ">".join(block), "순번": i + 1
+                "값": bottom_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
             })
 
     if not top_matches:
@@ -77,7 +85,13 @@ def predict():
         mode = request.args.get("mode", "3block_orig")
         size = int(mode[0])
 
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
@@ -95,7 +109,11 @@ def predict():
         used_indices = set()
         top, bottom = find_all_matches(flow, all_data, used_indices)
 
-        return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
+        return jsonify({
+            "예측회차": round_num,
+            "상단값들": top,
+            "하단값들": bottom
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -103,14 +121,22 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
+        from itertools import chain
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
         raw = response.data
         all_data = [convert(d) for d in raw]
 
         result = {}
+
         used_indices = set()
 
-        for size in [6, 5, 4, 3]:
+        for size in [6, 5, 4, 3]:  # 6 → 3줄 우선순위
             recent_block = all_data[:size]
             transform_modes = {
                 "flip_full": flip_full,
