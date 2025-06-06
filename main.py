@@ -34,39 +34,15 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data):
-    top_matches = []
-    bottom_matches = []
+def find_first_match(block, full_data):
     block_len = len(block)
-
     for i in reversed(range(len(full_data) - block_len)):
         candidate = full_data[i:i + block_len]
         if candidate == block:
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            top_matches.append({
-                "값": top_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
-
-            bottom_index = i + block_len
-            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-            bottom_matches.append({
-                "값": bottom_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
-
-    if not top_matches:
-        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-    if not bottom_matches:
-        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-
-    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
-    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
-
-    return top_matches, bottom_matches
+            return top_pred
+    return "❌ 없음"
 
 @app.route("/")
 def home():
@@ -75,10 +51,6 @@ def home():
 @app.route("/predict")
 def predict():
     try:
-        mode = request.args.get("mode", "3block_orig")
-        size = int(mode[0])
-        transform = mode.split("_")[1] if "_" in mode else "orig"
-
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -90,39 +62,28 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        # 최근 흐름에서 블럭 길이만큼 슬라이딩하면서 동일한 블럭만 허용
-        recent_block = []
-        for i in range(len(all_data) - size + 1):
-            block_candidate = all_data[i:i+size]
-            valid = True
-            for j in range(1, size):
-                if all_data[i+j-1][-1] == all_data[i+j][-1]:  # 예시로 홀짝이 동일하면 불연속
-                    valid = False
-                    break
-            if valid:
-                recent_block = block_candidate
-                break
+        used_indices = set()
+        results = []
 
-        if not recent_block:
-            return jsonify({
-                "예측회차": round_num,
-                "상단값들": [{"값": "❌ 없음", "블럭": "없음", "순번": "❌"}],
-                "하단값들": [{"값": "❌ 없음", "블럭": "없음", "순번": "❌"}]
-            })
+        for size in [6, 5, 4, 3]:
+            for i in range(len(all_data) - size + 1):
+                if any(idx in used_indices for idx in range(i, i + size)):
+                    continue
 
-        if transform == "flip_full":
-            recent_block = flip_full(recent_block)
-        elif transform == "flip_start":
-            recent_block = flip_start(recent_block)
-        elif transform == "flip_odd_even":
-            recent_block = flip_odd_even(recent_block)
-
-        top, bottom = find_all_matches(recent_block, all_data)
+                block = all_data[i:i + size]
+                pred = find_first_match(block, all_data)
+                results.append({
+                    "블럭길이": size,
+                    "시작줄": i,
+                    "블럭": ">".join(block),
+                    "예측값": pred
+                })
+                used_indices.update(range(i, i + size))
+                break  # 다음 블럭 길이로 넘어감
 
         return jsonify({
             "예측회차": round_num,
-            "상단값들": top,
-            "하단값들": bottom
+            "블럭예측결과": results
         })
 
     except Exception as e:
