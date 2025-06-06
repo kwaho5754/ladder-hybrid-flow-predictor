@@ -16,8 +16,6 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-used_indices_global = set()  # 중복 방지를 위한 전역 집합
-
 def convert(entry):
     side = '좌' if entry['start_point'] == 'LEFT' else '우'
     count = str(entry['line_count'])
@@ -36,13 +34,13 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data):
+def find_all_matches(block, full_data, used_indices):
     top_matches = []
     bottom_matches = []
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
-        if any(idx in used_indices_global for idx in range(i, i + block_len)):
+        if any(idx in used_indices for idx in range(i, i + block_len)):
             continue
 
         candidate = full_data[i:i + block_len]
@@ -63,8 +61,8 @@ def find_all_matches(block, full_data):
                 "순번": i + 1
             })
 
-            used_indices_global.update(range(i, i + block_len))  # 이 블럭의 인덱스를 전역으로 기록
-            break  # 가장 처음 매칭된 하나만
+            used_indices.update(range(i, i + block_len))
+            break
 
     if not top_matches:
         top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
@@ -104,9 +102,8 @@ def predict():
         else:
             flow = recent_flow
 
-        global used_indices_global
-        used_indices_global = set()  # 요청마다 초기화
-        top, bottom = find_all_matches(flow, all_data)
+        used_indices = set()  # ✅ 지역 변수로 중복 인덱스 추적
+        top, bottom = find_all_matches(flow, all_data, used_indices)
 
         return jsonify({
             "예측회차": round_num,
@@ -146,7 +143,8 @@ def predict_top3_summary():
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data)
+                used_indices = set()
+                top, bottom = find_all_matches(flow, all_data, used_indices)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
