@@ -1,62 +1,137 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>사다리 블럭 예측 결과</title>
+  <meta charset="UTF-8">
+  <title>🔮 사다리 블럭 예측 결과</title>
   <style>
     body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
     h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
+    .tabs { display: flex; justify-content: center; margin-bottom: 1rem; gap: 1rem; }
+    .tabs button {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 0.6rem;
+      background: #e0e7ff;
+      cursor: pointer;
+    }
+    .tabs button.active { background: #6366f1; color: white; }
     .card-grid { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }
     .card {
-      background: #fff; padding: 1rem; border-radius: 0.8rem;
-      box-shadow: 0 0 8px rgba(0,0,0,0.1); width: 320px;
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      box-shadow: 0 0 6px rgba(0,0,0,0.1);
+      width: 320px;
     }
-    .card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
-    .card p { margin: 0.2rem 0; font-size: 0.95rem; }
+    .card h3 { margin: 0.5rem 0; font-size: 1.05rem; }
+    .card p { margin: 0.3rem 0; font-size: 0.95rem; }
+    h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 1rem; text-align: center; }
+    table { margin: 1rem auto; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 0.4rem 0.8rem; }
+    th { background: #eef; }
   </style>
 </head>
 <body>
   <h1>🔮 사다리 블럭 예측 결과</h1>
-  <div id="results" class="card-grid"></div>
+  <div id="summary"></div>
+  <div class="tabs">
+    <button onclick="showTab('상단')" class="active">Top3 상단값</button>
+    <button onclick="showTab('하단')">Top3 하단값</button>
+  </div>
+  <div id="block-root"></div>
 
   <script>
-    async function loadPrediction() {
-      const res = await fetch("/predict");
-      const data = await res.json();
-      const container = document.getElementById("results");
-      container.innerHTML = "";
+    const modes = [
+      [6, "6block"],
+      [5, "5block"],
+      [4, "4block"],
+      [3, "3block"]
+    ];
+    const transforms = [
+      ["", "원본"],
+      ["_flip_full", "완전 대칭"],
+      ["_flip_start", "시작점 반전"],
+      ["_flip_odd_even", "홀짝 반전"]
+    ];
 
-      function addSection(titleText, items) {
+    let currentTab = "상단";
+
+    async function showTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll(".tabs button").forEach(btn => btn.classList.remove("active"));
+      document.querySelector(`.tabs button:contains('${tab}')`)?.classList.add("active");
+      render();
+    }
+
+    function render() {
+      const container = document.getElementById("block-root");
+      container.innerHTML = "";
+      dataBlocks.forEach(group => {
         const sectionTitle = document.createElement("h2");
-        sectionTitle.textContent = titleText;
-        sectionTitle.style.width = "100%";
+        sectionTitle.textContent = `${group.줄수}줄 블럭`;
         container.appendChild(sectionTitle);
 
-        for (const item of items) {
+        group.블럭들.forEach(block => {
           const card = document.createElement("div");
           card.className = "card";
 
           const title = document.createElement("h3");
-          title.textContent = `순번: ${item["순번"]}`;
+          title.textContent = `${group.줄수}줄 블럭 (${block.이름}) (회차 ${block.회차})`;
           card.appendChild(title);
 
-          const block = document.createElement("p");
-          block.textContent = `블럭: ${item["블럭"]}`;
-          card.appendChild(block);
+          const values = block[currentTab + "값들"] || [];
+          if (!values.length) {
+            const p = document.createElement("p");
+            p.textContent = "❌ 없음";
+            card.appendChild(p);
+          }
 
-          const predict = document.createElement("p");
-          predict.textContent = `예측값: ${item["값"]}`;
-          card.appendChild(predict);
+          values.forEach((v, idx) => {
+            const p = document.createElement("p");
+            p.textContent = `${idx + 1}. ${v.값} | 블럭: ${v.블럭} | 순번: ${v.순번}`;
+            card.appendChild(p);
+          });
 
           container.appendChild(card);
-        }
-      }
-
-      addSection("🔼 상단 예측값", data["상단값들"] || []);
-      addSection("🔽 하단 예측값", data["하단값들"] || []);
+        });
+      });
     }
 
-    loadPrediction();
+    let dataBlocks = [];
+
+    async function load() {
+      const summaryRes = await fetch("/predict_top3_summary");
+      const summaryData = await summaryRes.json();
+
+      const summaryEl = document.getElementById("summary");
+      const table = document.createElement("table");
+      const header = document.createElement("tr");
+      header.innerHTML = "<th>블럭</th><th>Top3 상단값</th><th>Top3 하단값</th>";
+      table.appendChild(header);
+
+      for (const [key, val] of Object.entries(summaryData)) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${key}</td><td>${val.Top3상단?.join(", ")}</td><td>${val.Top3하단?.join(", ")}</td>`;
+        table.appendChild(tr);
+      }
+      summaryEl.appendChild(table);
+
+      const blocks = [];
+      for (const [size, prefix] of modes) {
+        const group = { 줄수: size, 블럭들: [] };
+        for (const [suffix, name] of transforms) {
+          const res = await fetch(`/predict?mode=${prefix}${suffix}`);
+          const json = await res.json();
+          group.블럭들.push({ 이름: name, 회차: json.예측회차, 상단값들: json.상단값들, 하단값들: json.하단값들 });
+        }
+        blocks.push(group);
+      }
+      dataBlocks = blocks;
+      render();
+    }
+
+    load();
   </script>
 </body>
 </html>
