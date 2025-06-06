@@ -39,7 +39,7 @@ def find_all_first_matches(data, block_sizes, transform=None):
             candidate_transformed = transform(candidate) if transform else candidate
             if candidate_transformed == recent_block:
                 results[size] = {
-                    "블럭": candidate_transformed,
+                    "블럭": candidate_transformed,  # 💡 변형된 블럭을 출력에도 사용
                     "상단": data[i - 1] if i > 0 else None,
                     "하단": data[i + size] if i + size < len(data) else None,
                     "순번": i + 1
