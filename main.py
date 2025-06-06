@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from collections import defaultdict
@@ -58,7 +58,7 @@ def analyze_blocks(raw_data):
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return send_from_directory('.', 'index.html')
 
 @app.route('/predict_top3_summary')
 def predict_top3_summary():
