@@ -30,29 +30,42 @@ def flip_start(block):
 def flip_odd_even(block):
     return [reverse_name(b) if b[-1] in ['홀', '짝'] else b for b in block]
 
-def find_directional_matches(data, block_sizes, transform=None):
-    used = set()
-    result = {}
-    for size in sorted(block_sizes, reverse=True):
-        recent_block = data[0:size]
-        if transform:
-            recent_block = transform(recent_block)
-        for i in range(1, len(data) - size):
-            if any(j in used for j in range(i, i + size)):
-                continue
-            candidate = data[i:i+size]
-            if transform:
-                candidate = transform(candidate)
-            if candidate == recent_block:
-                result[f"{size}줄"] = {
-                    "블럭": candidate,
-                    "상단": data[i - 1] if i > 0 else None,
-                    "하단": data[i + size] if i + size < len(data) else None,
-                    "순번": i + 1
-                }
-                used.update(range(i, i + size))
-                break
-    return result
+def find_matches_by_size(data, size, transform, used_indices):
+    recent_block = data[0:size]
+    if transform:
+        recent_block = transform(recent_block)
+
+    for i in range(1, len(data) - size):
+        if any(j in used_indices for j in range(i, i + size)):
+            continue
+        candidate = data[i:i+size]
+        candidate_transformed = transform(candidate) if transform else candidate
+        if candidate_transformed == recent_block:
+            used_indices.update(range(i, i + size))
+            return {
+                "블럭": candidate_transformed,
+                "상단": data[i - 1] if i > 0 else None,
+                "하단": data[i + size] if i + size < len(data) else None,
+                "순번": i + 1
+            }
+    return None
+
+def find_all_directions(data):
+    directions = {
+        "원본": None,
+        "대칭": lambda b: [reverse_name(x) for x in b],
+        "시작반전": flip_start,
+        "홀짝반전": flip_odd_even
+    }
+    results = {}
+    for label, transform in directions.items():
+        used_indices = set()
+        results[label] = {}
+        for size in [5, 4, 3]:
+            match = find_matches_by_size(data, size, transform, used_indices)
+            if match:
+                results[label][f"{size}줄"] = match
+    return results
 
 @app.route("/")
 def home():
@@ -63,24 +76,16 @@ def predict():
     try:
         raw = supabase.table(SUPABASE_TABLE).select("*") \
             .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute().data
+
         if not raw:
             return jsonify({"error": "데이터 없음"}), 500
+
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
+        results = find_all_directions(all_data)
+        results["예측회차"] = round_num
 
-        modes = {
-            "처음매칭": None,
-            "처음매칭_대칭": lambda b: [reverse_name(x) for x in b],
-            "처음매칭_시작반전": flip_start,
-            "처음매칭_홀짝반전": flip_odd_even
-        }
-
-        result = {"예측회차": round_num}
-
-        for key, transform in modes.items():
-            result[key] = find_directional_matches(all_data, [5, 4, 3], transform)
-
-        return jsonify(result)
+        return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

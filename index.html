@@ -28,18 +28,13 @@
         return;
       }
 
-      const blocks = [
-        { title: "원본", key: "처음매칭" },
-        { title: "대칭", key: "처음매칭_대칭" },
-        { title: "시작반전", key: "처음매칭_시작반전" },
-        { title: "홀짝반전", key: "처음매칭_홀짝반전" }
-      ];
+      const blocks = ["원본", "대칭", "시작반전", "홀짝반전"];
 
       let html = `<h2>예측 회차: ${data["예측회차"]}</h2><div class="card-grid">`;
 
-      for (const block of blocks) {
-        const match = data[block.key];
-        html += `<div class="card"><h2>${block.title}</h2><pre>`;
+      for (const key of blocks) {
+        const match = data[key];
+        html += `<div class="card"><h2>${key}</h2><pre>`;
         if (!match) {
           html += `❌ 데이터 없음`;
         } else {
