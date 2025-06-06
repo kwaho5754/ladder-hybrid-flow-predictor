@@ -26,11 +26,13 @@ def convert(entry):
 def parse_block(s):
     return s[0], s[1:-1], s[-1]
 
+# ✅ 시작점만 반전
 def flip_start(block):
-    return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
+    return [('우' if s == '좌' else '좌') + c + o for s, c, o in map(parse_block, block)]
 
+# ✅ 홀짝만 반전
 def flip_odd_even(block):
-    return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
+    return [s + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
 
 def reverse_name(name):
     name = name.replace('좌', '@').replace('우', '좌').replace('@', '우')
@@ -81,9 +83,7 @@ def find_all_first_matches(data, block_sizes, transform=None):
             if candidate == match_target:
                 top = data[i - 1] if i > 0 else "(없음)"
                 bottom = data[i + size] if i + size < len(data) else "(없음)"
-
                 display_block = match_target
-
                 results[size] = {
                     "블럭": display_block,
                     "상단": top,
