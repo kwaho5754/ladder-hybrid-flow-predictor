@@ -1,4 +1,3 @@
-# ✅ main.py - 예측 12개 기반 고정 Top3 구조 + latest_blocks API 포함
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from supabase import create_client, Client
@@ -17,7 +16,6 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 📘 변환 함수
 def convert(entry):
     try:
         start = entry.get('start_point', '')
@@ -47,7 +45,6 @@ def normalize(value):
     if '우4짝' in value: return '우사짝'
     return '❌ 없음'
 
-# ✅ 예측 방식들
 def meta_flow_predict(data):
     counter = Counter(data[:100])
     total = sum(counter.values())
@@ -128,7 +125,6 @@ def block_tail_predict(data):
     counter = Counter(tail)
     return counter.most_common(1)[0][0] if counter else '❌ 없음'
 
-# ✅ Top3 고정
 PRIORITY = {'좌삼짝': 0, '우삼홀': 1, '좌사홀': 2, '우사짝': 3, '❌ 없음': 99}
 
 def fixed_top3(predictions):
@@ -144,11 +140,12 @@ def home():
 @app.route("/meta_predict")
 def meta_predict():
     try:
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
+        response = supabase.table(SUPABASE_TABLE).select("*")\
+            .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
         raw = response.data
-        all_data = [convert(d) for d in raw]
+        # 반대로 뒤집기: 과거 → 최신 순서로 분석하도록
+        all_data = [convert(d) for d in raw][::-1]
         round_num = int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999
-
         predictions = [
             meta_flow_predict(all_data),
             periodic_pattern_predict(all_data),
@@ -161,9 +158,7 @@ def meta_predict():
             odd_even_flow_predict(all_data),
             block_tail_predict(all_data),
         ]
-
         top3_final = fixed_top3(predictions)
-
         return jsonify({
             "예측회차": round_num,
             "Top3최종예측": top3_final
@@ -174,9 +169,11 @@ def meta_predict():
 @app.route("/latest_blocks")
 def latest_blocks():
     try:
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(5).execute()
+        response = supabase.table(SUPABASE_TABLE).select("*")\
+            .order("reg_date", desc=True).order("date_round", desc=True).limit(5).execute()
         raw = response.data
-        blocks = [convert(d) for d in raw]
+        # 반대로 뒤집기: 최근값이 맨 앞(왼쪽)에 오도록
+        blocks = [convert(d) for d in raw][::-1]
         return jsonify({"blocks": blocks})
     except Exception as e:
         return jsonify({"error": str(e)})

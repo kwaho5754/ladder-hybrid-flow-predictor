@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>사다리 머신 예측</title>
   <style>
     body {
@@ -27,6 +27,8 @@
     .block-list {
       font-size: 1.2rem;
       margin-top: 0.5rem;
+      white-space: nowrap;
+      overflow-x: auto;
     }
     .error {
       color: red;
@@ -45,6 +47,7 @@
   </div>
 
   <script>
+    // 예측 결과 가져오기
     fetch("/meta_predict")
       .then(res => res.json())
       .then(data => {
@@ -64,9 +67,11 @@
           `<div class="error">❌ 머신 예측 실패: ${err.message}</div>`;
       });
 
+    // 최근 블럭 5개 가져오기
     fetch("/latest_blocks")
       .then(res => res.json())
       .then(data => {
+        // 최신값이 맨 왼쪽에 오도록, 서버에서 이미 reverse 처리했으니 그대로 출력
         const blocks = data.blocks;
         document.getElementById("latest-blocks").innerText = blocks.join(" → ");
       })
