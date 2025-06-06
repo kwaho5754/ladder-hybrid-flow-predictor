@@ -48,7 +48,6 @@ def normalize(value):
     if '우4짝' in value: return '우사짝'
     return '❌ 없음'
 
-# 기존 10개 예측 모델들
 def meta_flow_predict(data):
     counter = Counter(data[:100])
     total = sum(counter.values())
@@ -129,7 +128,6 @@ def block_tail_predict(data):
     counter = Counter(tail)
     return counter.most_common(1)[0][0] if counter else '❌ 없음'
 
-# 추가된 1, 3, 5번 기능들
 def detect_anomaly(data, window=20, threshold=0.3):
     try:
         values = np.array([hash(d) % 100 for d in data])
@@ -205,7 +203,7 @@ def meta_predict():
         return jsonify({
             "예측회차": int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999,
             "Top3최종예측": top3_final,
-            "변화감지": anomaly_flag,
+            "변화감지": str(anomaly_flag),
             "잔차분석": residuals[:10]
         })
     except Exception as e:
