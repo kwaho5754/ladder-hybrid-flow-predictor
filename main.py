@@ -30,26 +30,26 @@ def flip_start(block):
 def flip_odd_even(block):
     return [reverse_name(b) if b[-1] in ['홀', '짝'] else b for b in block]
 
-def find_all_first_matches(data, block_sizes, transform=None):
-    results = {}
+def find_matches(data, block_sizes, transform=None):
+    used = set()
+    result = {}
     for size in sorted(block_sizes, reverse=True):
-        recent_block = transform(data[0:size]) if transform else data[0:size]
+        recent_block = transform(data[:size]) if transform else data[:size]
         for i in range(1, len(data) - size):
+            if any(j in used for j in range(i, i + size)):
+                continue
             candidate = data[i:i+size]
             candidate_transformed = transform(candidate) if transform else candidate
             if candidate_transformed == recent_block:
-                results[size] = {
-                    "블럭": candidate_transformed,  # 💡 변형된 블럭을 출력에도 사용
+                result[f"{size}줄"] = {
+                    "블럭": candidate_transformed,
                     "상단": data[i - 1] if i > 0 else None,
                     "하단": data[i + size] if i + size < len(data) else None,
                     "순번": i + 1
                 }
+                used.update(range(i, i + size))
                 break
-    return {
-        "3줄": results.get(3),
-        "4줄": results.get(4),
-        "5줄": results.get(5)
-    }
+    return result
 
 @app.route("/")
 def home():
@@ -65,18 +65,18 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        match_original = find_all_first_matches(all_data, [5, 4, 3])
-        match_symmetric = find_all_first_matches(all_data, [5, 4, 3], transform=lambda b: [reverse_name(x) for x in b])
-        match_start = find_all_first_matches(all_data, [5, 4, 3], transform=flip_start)
-        match_odd = find_all_first_matches(all_data, [5, 4, 3], transform=flip_odd_even)
+        modes = {
+            "처음매칭": None,
+            "처음매칭_대칭": lambda b: [reverse_name(x) for x in b],
+            "처음매칭_시작반전": flip_start,
+            "처음매칭_홀짝반전": flip_odd_even
+        }
 
-        return jsonify({
-            "예측회차": round_num,
-            "처음매칭": match_original,
-            "처음매칭_대칭": match_symmetric,
-            "처음매칭_시작반전": match_start,
-            "처음매칭_홀짝반전": match_odd
-        })
+        result = {"예측회차": round_num}
+        for key, transform in modes.items():
+            result[key] = find_matches(all_data, [5, 4, 3], transform)
+
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
