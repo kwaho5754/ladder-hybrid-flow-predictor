@@ -26,11 +26,9 @@ def convert(entry):
 def parse_block(s):
     return s[0], s[1:-1], s[-1]
 
-# ✅ 시작점만 반전
 def flip_start(block):
     return [('우' if s == '좌' else '좌') + c + o for s, c, o in map(parse_block, block)]
 
-# ✅ 홀짝만 반전
 def flip_odd_even(block):
     return [s + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
 
@@ -57,7 +55,7 @@ def find_top3(data, block_size):
         transformed = transform(recent_block)
         freq = {}
         for i in range(1, len(data) - block_size):
-            candidate = data[i:i+block_size]
+            candidate = transform(data[i:i+block_size])
             if candidate == transformed:
                 top = data[i - 1] if i > 0 else None
                 if top:
@@ -80,7 +78,8 @@ def find_all_first_matches(data, block_sizes, transform=None):
             if any(pos in used_positions for pos in range(i, i + size)):
                 continue
             candidate = data[i:i+size]
-            if candidate == match_target:
+            transformed_candidate = transform(candidate) if transform else candidate
+            if transformed_candidate == match_target:
                 top = data[i - 1] if i > 0 else "(없음)"
                 bottom = data[i + size] if i + size < len(data) else "(없음)"
                 display_block = match_target
