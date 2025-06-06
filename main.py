@@ -69,22 +69,24 @@ def find_top3(data, block_size):
     return result, recent_block
 
 def find_all_first_matches(data, block_sizes, transform=None):
-    recent_blocks = {n: transform(data[0:n]) if transform else data[0:n] for n in block_sizes}
+    recent_blocks = {n: data[0:n] for n in block_sizes}  # always raw recent blocks
 
     used_positions = set()
     results = {}
 
     for size in sorted(block_sizes, reverse=True):
         recent = recent_blocks[size]
+        match_target = transform(recent) if transform else recent
+
         for i in range(1, len(data) - size):
             if any(pos in used_positions for pos in range(i, i + size)):
                 continue
             candidate = data[i:i+size]
-            if candidate == recent:
+            if candidate == match_target:
                 top = data[i - 1] if i > 0 else None
                 bottom = data[i + size] if i + size < len(data) else None
 
-                display_block = transform(candidate) if transform else candidate
+                display_block = match_target
 
                 results[size] = {
                     "블럭": display_block,
