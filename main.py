@@ -48,7 +48,7 @@ def normalize(value):
     if '우4짝' in value: return '우사짝'
     return '❌ 없음'
 
-# 기존 10개 모델 함수 (예시)
+# 기존 10개 예측 모델들
 def meta_flow_predict(data):
     counter = Counter(data[:100])
     total = sum(counter.values())
@@ -129,7 +129,7 @@ def block_tail_predict(data):
     counter = Counter(tail)
     return counter.most_common(1)[0][0] if counter else '❌ 없음'
 
-# 1) 변화 탐지 함수
+# 추가된 1, 3, 5번 기능들
 def detect_anomaly(data, window=20, threshold=0.3):
     try:
         values = np.array([hash(d) % 100 for d in data])
@@ -141,7 +141,6 @@ def detect_anomaly(data, window=20, threshold=0.3):
         print(f"Error in detect_anomaly: {e}")
         return False
 
-# 3) 특이점 탐색용 예측 함수
 def anomaly_focused_predict(data):
     if detect_anomaly(data):
         counter = Counter(data[-50:])
@@ -149,14 +148,14 @@ def anomaly_focused_predict(data):
         return rare if rare else ['❌ 없음']
     return ['❌ 없음']
 
-# 5) 시계열 분해 함수
 def decompose_timeseries(data):
     try:
         values = [hash(d) % 100 for d in data]
         series = pd.Series(values)
+        if len(series) < 13:
+            return []
         result = seasonal_decompose(series, model='additive', period=12, extrapolate_trend='freq')
-        residuals = result.resid.dropna()
-        return residuals.tolist()
+        return result.resid.dropna().tolist()
     except Exception as e:
         print(f"Error in decompose_timeseries: {e}")
         return []
@@ -164,7 +163,7 @@ def decompose_timeseries(data):
 PRIORITY = {'좌삼짝': 0, '우삼홀': 1, '좌사홀': 2, '우사짝': 3, '❌ 없음': 99}
 
 def fixed_top3(predictions):
-    norm = [normalize(p) for p in predictions if p != '❌ 없음']
+    norm = [normalize(p) for p in predictions if isinstance(p, str) and p != '❌ 없음']
     count = Counter(norm)
     sorted_items = sorted(count.items(), key=lambda x: (-x[1], PRIORITY.get(x[0], 99)))
     return [item[0] for item in sorted_items[:3]]
@@ -198,9 +197,8 @@ def meta_predict():
             block_tail_predict(all_data),
         ]
 
-        # anomaly_focused_predict가 의미있는 결과면 추가
         if anomaly_preds != ['❌ 없음']:
-            base_preds.extend(anomaly_preds)
+            base_preds.extend(p for p in anomaly_preds if isinstance(p, str))
 
         top3_final = fixed_top3(base_preds)
 
@@ -208,7 +206,7 @@ def meta_predict():
             "예측회차": int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999,
             "Top3최종예측": top3_final,
             "변화감지": anomaly_flag,
-            "잔차분석": residuals[:10],  # 잔차 일부만 샘플로 반환
+            "잔차분석": residuals[:10]
         })
     except Exception as e:
         return jsonify({"error": str(e)})
