@@ -25,31 +25,23 @@ def reverse_name(name):
     return name
 
 def flip_start(block):
-    return [
-        reverse_name(b) if i == 0 else b
-        for i, b in enumerate(block)
-    ]
+    return [reverse_name(b) if i == 0 else b for i, b in enumerate(block)]
 
 def flip_odd_even(block):
-    return [
-        reverse_name(b) if b[-1] in ['홀', '짝'] else b
-        for b in block
-    ]
+    return [reverse_name(b) if b[-1] in ['홀', '짝'] else b for b in block]
 
 def find_all_first_matches(data, block_sizes, transform=None):
-    recent_blocks = {n: transform(data[0:n]) if transform else data[0:n] for n in block_sizes}
     results = {}
     for size in sorted(block_sizes, reverse=True):
-        recent = recent_blocks[size]
+        recent = transform(data[0:size]) if transform else data[0:size]
         for i in range(1, len(data) - size):
             candidate = data[i:i+size]
-            transformed = transform(candidate) if transform else candidate
-            if transformed == recent:
+            candidate_transformed = transform(candidate) if transform else candidate
+            if candidate_transformed == recent:
                 top = data[i - 1] if i > 0 else None
                 bottom = data[i + size] if i + size < len(data) else None
-                display_block = candidate
                 results[size] = {
-                    "블럭": display_block,
+                    "블럭": candidate,
                     "상단": top,
                     "하단": bottom,
                     "순번": i + 1
@@ -75,15 +67,15 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
         first_matches = find_all_first_matches(all_data, [5, 4, 3])
-        first_matches_sym = find_all_first_matches(all_data, [5, 4, 3], transform=lambda b: [reverse_name(x) for x in b])
-        first_matches_start = find_all_first_matches(all_data, [5, 4, 3], transform=flip_start)
-        first_matches_odd = find_all_first_matches(all_data, [5, 4, 3], transform=flip_odd_even)
+        match_sym = find_all_first_matches(all_data, [5, 4, 3], transform=lambda b: [reverse_name(x) for x in b])
+        match_start = find_all_first_matches(all_data, [5, 4, 3], transform=flip_start)
+        match_odd = find_all_first_matches(all_data, [5, 4, 3], transform=flip_odd_even)
         return jsonify({
             "예측회차": round_num,
             "처음매칭": first_matches,
-            "처음매칭_대칭": first_matches_sym,
-            "처음매칭_시작반전": first_matches_start,
-            "처음매칭_홀짝반전": first_matches_odd
+            "처음매칭_대칭": match_sym,
+            "처음매칭_시작반전": match_start,
+            "처음매칭_홀짝반전": match_odd
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
