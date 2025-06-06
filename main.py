@@ -6,7 +6,6 @@ import os
 from collections import Counter
 
 load_dotenv()
-
 app = Flask(__name__)
 CORS(app)
 
@@ -35,39 +34,36 @@ def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
 def find_all_matches(block, full_data, used_indices):
-    top_matches = []
-    bottom_matches = []
+    top_matches, bottom_matches = [], []
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
-        if any(idx in used_indices for idx in range(i, i + block_len)):
-            continue
+        if any(j in used_indices for j in range(i, i + block_len)):
+            continue  # 이미 사용된 인덱스는 스킵
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
+            used_indices.update(range(i, i + block_len))
+
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
             top_matches.append({
-                "값": top_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
+                "값": top_pred, "블럭": ">".join(block), "순번": i + 1
             })
 
             bottom_index = i + block_len
             bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
             bottom_matches.append({
-                "값": bottom_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
+                "값": bottom_pred, "블럭": ">".join(block), "순번": i + 1
             })
-
-            used_indices.update(range(i, i + block_len))
-            break
 
     if not top_matches:
         top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
     if not bottom_matches:
         bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+
+    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
 
     return top_matches, bottom_matches
 
@@ -81,13 +77,7 @@ def predict():
         mode = request.args.get("mode", "3block_orig")
         size = int(mode[0])
 
-        response = supabase.table(SUPABASE_TABLE) \
-            .select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(3000) \
-            .execute()
-
+        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
@@ -102,14 +92,10 @@ def predict():
         else:
             flow = recent_flow
 
-        used_indices = set()  # ✅ 지역 변수로 중복 인덱스 추적
+        used_indices = set()
         top, bottom = find_all_matches(flow, all_data, used_indices)
 
-        return jsonify({
-            "예측회차": round_num,
-            "상단값들": top,
-            "하단값들": bottom
-        })
+        return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
 
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -117,20 +103,14 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        from itertools import chain
-        response = supabase.table(SUPABASE_TABLE) \
-            .select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(3000) \
-            .execute()
-
+        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
         raw = response.data
         all_data = [convert(d) for d in raw]
 
         result = {}
+        used_indices = set()
 
-        for size in [3, 4]:  # 3줄 + 4줄 블럭 포함
+        for size in [6, 5, 4, 3]:
             recent_block = all_data[:size]
             transform_modes = {
                 "flip_full": flip_full,
@@ -143,7 +123,6 @@ def predict_top3_summary():
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                used_indices = set()
                 top, bottom = find_all_matches(flow, all_data, used_indices)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
