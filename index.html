@@ -1,72 +1,164 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>사다리 예측 시스템</title>
+  <meta charset="UTF-8" />
+  <title>사다리 블럭 예측 결과</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: #eee;
-      padding: 20px;
+    body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
+    h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
+    .summary-box {
+      max-width: 700px; margin: 0 auto 2rem auto;
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.1); padding: 1rem;
     }
-    h1 {
-      color: #00e0ff;
+    .summary-box table { width: 100%; border-collapse: collapse; }
+    .summary-box th, .summary-box td {
+      padding: 0.6rem; border-bottom: 1px solid #ddd; text-align: center;
     }
-    .block-section {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
+    .summary-box th { background: #eef2ff; }
+    .section { margin-bottom: 3rem; }
+    .card-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card {
+      background: #fff; padding: 1rem; border-radius: 0.8rem;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1); width: 280px;
     }
-    .block-card {
-      background: #222;
-      border: 1px solid #444;
-      border-radius: 10px;
-      padding: 15px;
-      width: 280px;
-    }
-    .block-card h3 {
-      color: #ffcc00;
-      margin-bottom: 8px;
-    }
-    .block-card p {
-      margin: 4px 0;
-    }
+    .card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .card h4 { font-size: 0.95rem; margin-top: 0.8rem; margin-bottom: 0.4rem; }
+    .card ol { padding-left: 1.2rem; }
+    .card li { font-size: 0.9rem; margin-bottom: 0.4rem; }
   </style>
 </head>
 <body>
-  <h1>사다리 예측 결과</h1>
-  <div id="prediction" class="block-section"></div>
+  <h1>🔮 사다리 블럭 예측 결과</h1>
+
+  <!-- ✅ Top3 요약 테이블 (3줄 + 4줄 블럭, 원본 제외) -->
+  <div class="summary-box">
+    <table>
+      <thead>
+        <tr>
+          <th>블럭</th>
+          <th>Top3 상단값</th>
+          <th>Top3 하단값</th>
+        </tr>
+      </thead>
+      <tbody id="top3-summary-body">
+        <!-- JS에서 채워짐 -->
+      </tbody>
+    </table>
+  </div>
+
+  <div id="results"></div>
 
   <script>
-    async function fetchPrediction() {
+    const modes = [
+      "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
+      "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even",
+      "5block_orig", "5block_flip_full", "5block_flip_start", "5block_flip_odd_even",
+      "6block_orig", "6block_flip_full", "6block_flip_start", "6block_flip_odd_even"
+    ];
+
+    const modeTitles = {
+      "3block": "3줄 블럭", "4block": "4줄 블럭",
+      "5block": "5줄 블럭", "6block": "6줄 블럭"
+    };
+
+    const transformLabel = {
+      "orig": "원본", "flip_start": "시작점 변형",
+      "flip_odd_even": "홀짝 변형", "flip_full": "완전 대칭"
+    };
+
+    const getModeKey = (mode) => mode.split("_")[0];
+
+    function createCard(mode, data) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const mkey = getModeKey(mode);
+      const typeKey = mode.split("_").slice(1).join("_");
+
+      const label = document.createElement("h3");
+      label.textContent = `${modeTitles[mkey]} (${transformLabel[typeKey]}) (회차 ${data["예측회차"]})`;
+      card.appendChild(label);
+
+      const topLabel = document.createElement("h4");
+      topLabel.textContent = "🔺 상단값 예측";
+      card.appendChild(topLabel);
+
+      const topList = document.createElement("ol");
+      for (const match of data["상단값들"] || []) {
+        const item = document.createElement("li");
+        item.textContent = `${match["값"]} | 블럭: ${match["블럭"]} | 순번: ${match["순번"]}`;
+        topList.appendChild(item);
+      }
+      card.appendChild(topList);
+
+      const bottomLabel = document.createElement("h4");
+      bottomLabel.textContent = "🔻 하단값 예측";
+      card.appendChild(bottomLabel);
+
+      const bottomList = document.createElement("ol");
+      for (const match of data["하단값들"] || []) {
+        const item = document.createElement("li");
+        item.textContent = `${match["값"]} | 블럭: ${match["블럭"]} | 순번: ${match["순번"]}`;
+        bottomList.appendChild(item);
+      }
+      card.appendChild(bottomList);
+
+      return card;
+    }
+
+    async function loadTop3Summary() {
       const res = await fetch("/predict_top3_summary");
       const data = await res.json();
+      const tbody = document.getElementById("top3-summary-body");
 
-      const container = document.getElementById("prediction");
-      container.innerHTML = "";
-
-      for (const key in data) {
-        if (data[key].length === 0) continue;
-        const block = data[key][0];
-
-        const card = document.createElement("div");
-        card.className = "block-card";
-
-        card.innerHTML = `
-          <h3>${key}</h3>
-          <p><strong>블럭:</strong> ${block["블럭"]}</p>
-          <p><strong>순번:</strong> ${block["순번"]}</p>
-          <p><strong>상단값:</strong> ${block["상단값"]}</p>
-          <p><strong>하단값:</strong> ${block["하단값"]}</p>
+      for (const key of Object.keys(data)) {
+        const info = data[key];
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${key.replace(" Top3 요약", "")}</td>
+          <td>${info["Top3상단"].join(", ")}</td>
+          <td>${info["Top3하단"].join(", ")}</td>
         `;
-
-        container.appendChild(card);
+        tbody.appendChild(row);
       }
     }
 
-    fetchPrediction();
-    setInterval(fetchPrediction, 10000); // 10초마다 갱신
+    async function loadResults() {
+      const resultContainer = document.getElementById("results");
+      const sectionMap = {};
+
+      for (const mode of modes) {
+        try {
+          const res = await fetch(`/predict?mode=${mode}`);
+          const data = await res.json();
+
+          const sectionKey = getModeKey(mode);
+          if (!sectionMap[sectionKey]) {
+            const section = document.createElement("div");
+            section.className = "section";
+
+            const title = document.createElement("h2");
+            title.textContent = modeTitles[sectionKey];
+            section.appendChild(title);
+
+            const row = document.createElement("div");
+            row.className = "card-row";
+            section.appendChild(row);
+
+            resultContainer.appendChild(section);
+            sectionMap[sectionKey] = row;
+          }
+
+          sectionMap[sectionKey].appendChild(createCard(mode, data));
+        } catch (e) {
+          console.error(`❌ 오류: ${mode} 예측 결과 불러오기 실패`, e);
+        }
+      }
+    }
+
+    loadTop3Summary();
+    loadResults();
   </script>
 </body>
 </html>
