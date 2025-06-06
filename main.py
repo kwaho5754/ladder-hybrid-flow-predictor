@@ -76,7 +76,8 @@ def home():
 def predict():
     try:
         mode = request.args.get("mode", "3block_orig")
-        size = int(mode[0])
+        mode_prefix = mode.split("_")[0]  # e.g., 3block
+        mode_suffix = "_".join(mode.split("_")[1:])  # e.g., flip_full
 
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
@@ -89,42 +90,38 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        # ✅ 겹치지 않게 사용하는 인덱스 추적
         used_indices = set()
-        start = 0
-        end = len(all_data)
+        selected_block = []
+        selected_size = 0
 
-        block_indices = list(range(6, 2, -1))  # 6,5,4,3
+        for size in [6, 5, 4, 3]:
+            for i in range(len(all_data) - size + 1):
+                if any(idx in used_indices for idx in range(i, i + size)):
+                    continue
+                candidate_block = all_data[i:i + size]
+                selected_block = candidate_block
+                selected_size = size
+                used_indices.update(range(i, i + size))
+                break
+            if selected_block:
+                break
 
-        for block_size in block_indices:
-            if size != block_size:
-                continue
-            for i in range(end - block_size + 1):
-                if any(j in used_indices for j in range(i, i + block_size)):
-                    continue  # 이미 사용된 인덱스 포함되면 스킵
-                recent_flow = all_data[i:i + block_size]
+        if mode_suffix == "flip_full":
+            transformed = flip_full(selected_block)
+        elif mode_suffix == "flip_start":
+            transformed = flip_start(selected_block)
+        elif mode_suffix == "flip_odd_even":
+            transformed = flip_odd_even(selected_block)
+        else:
+            transformed = selected_block
 
-                if "flip_full" in mode:
-                    flow = flip_full(recent_flow)
-                elif "flip_start" in mode:
-                    flow = flip_start(recent_flow)
-                elif "flip_odd_even" in mode:
-                    flow = flip_odd_even(recent_flow)
-                else:
-                    flow = recent_flow
-
-                top, bottom = find_all_matches(flow, all_data)
-                used_indices.update(range(i, i + block_size))
-                return jsonify({
-                    "예측회차": round_num,
-                    "상단값들": top,
-                    "하단값들": bottom
-                })
+        top, bottom = find_all_matches(transformed, all_data)
 
         return jsonify({
             "예측회차": round_num,
-            "상단값들": [{"값": "❌ 없음", "블럭": "없음", "순번": "❌"}],
-            "하단값들": [{"값": "❌ 없음", "블럭": "없음", "순번": "❌"}]
+            "상단값들": top,
+            "하단값들": bottom,
+            "블럭길이": selected_size
         })
 
     except Exception as e:
