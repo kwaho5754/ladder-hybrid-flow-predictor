@@ -6,3 +6,4 @@ python-dotenv
 gunicorn
 pandas
 uvicorn
+statsmodels
