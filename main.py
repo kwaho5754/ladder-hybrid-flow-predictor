@@ -75,6 +75,13 @@ def find_all_matches(block, full_data, used_index=set()):
 
     return top_matches, bottom_matches, matched_indices
 
+def get_valid_recent_block(size, all_data, used_index):
+    for i in range(len(all_data) - size):
+        block_range = set(range(i, i + size))
+        if not block_range & used_index:
+            return all_data[i:i+size]
+    return []
+
 @app.route("/")
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
@@ -95,7 +102,9 @@ def predict():
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
-        recent_flow = all_data[:size]
+
+        used_index_dummy = set()  # 단일 예측 시에는 제한 없음
+        recent_flow = get_valid_recent_block(size, all_data, used_index_dummy)
 
         if "flip_full" in mode:
             flow = flip_full(recent_flow)
@@ -106,8 +115,7 @@ def predict():
         else:
             flow = recent_flow
 
-        used_index = set()
-        top, bottom, _ = find_all_matches(flow, all_data, used_index)
+        top, bottom, _ = find_all_matches(flow, all_data)
 
         return jsonify({
             "예측회차": round_num,
@@ -138,7 +146,6 @@ def predict_top3_summary():
         used_index_4 = set()
 
         for size in [6, 5, 4, 3]:
-            recent_block = all_data[:size]
             transform_modes = {
                 "flip_full": flip_full,
                 "flip_start": flip_start,
@@ -149,6 +156,18 @@ def predict_top3_summary():
             bottom_values = []
 
             for fn in transform_modes.values():
+                if size == 6:
+                    recent_block = get_valid_recent_block(size, all_data, used_index_6)
+                elif size == 5:
+                    recent_block = get_valid_recent_block(size, all_data, used_index_6)
+                elif size == 4:
+                    recent_block = get_valid_recent_block(size, all_data, used_index_5)
+                elif size == 3:
+                    recent_block = get_valid_recent_block(size, all_data, used_index_4)
+
+                if not recent_block:
+                    continue
+
                 flow = fn(recent_block)
 
                 if size == 6:
