@@ -87,6 +87,44 @@ def get_non_overlapping_block(size, all_data, used_index):
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
 
+@app.route("/predict")
+def predict():
+    try:
+        mode = request.args.get("mode", "3block_orig")
+        size = int(mode[0])
+
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
+        raw = response.data
+        round_num = int(raw[0]["date_round"]) + 1
+        all_data = [convert(d) for d in raw]
+
+        recent_block, _ = get_non_overlapping_block(size, all_data, set())
+        if "flip_full" in mode:
+            flow = flip_full(recent_block)
+        elif "flip_start" in mode:
+            flow = flip_start(recent_block)
+        elif "flip_odd_even" in mode:
+            flow = flip_odd_even(recent_block)
+        else:
+            flow = recent_block
+
+        top, bottom, _ = find_all_matches(flow, all_data, set())
+
+        return jsonify({
+            "예측회차": round_num,
+            "상단값들": top,
+            "하단값들": bottom
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
@@ -103,56 +141,37 @@ def predict_top3_summary():
         result = {}
         used_index_total = set()
 
-        # **1️⃣ 4줄 블럭 먼저 선택 및 매칭**
-        size = 4
-        transform_modes = {
-            "flip_full": flip_full,
-            "flip_start": flip_start,
-            "flip_odd_even": flip_odd_even
-        }
+        for size in [4, 3]:
+            transform_modes = {
+                "flip_full": flip_full,
+                "flip_start": flip_start,
+                "flip_odd_even": flip_odd_even
+            }
 
-        for fn in transform_modes.values():
-            block, block_range = get_non_overlapping_block(size, all_data, used_index_total)
-            if not block:
-                continue
+            top_values = []
+            bottom_values = []
 
-            flow = fn(block)
-            top, bottom, matched = find_all_matches(flow, all_data, used_index_total)
+            for fn in transform_modes.values():
+                block, block_range = get_non_overlapping_block(size, all_data, used_index_total)
+                if not block:
+                    continue
 
-            used_index_total.update(block_range)  # **4줄 블럭에서 사용된 인덱스 저장**
-            used_index_total.update(matched)
+                flow = fn(block)
+                top, bottom, matched = find_all_matches(flow, all_data, used_index_total)
 
-        # **2️⃣ 3줄 블럭 선택 시 4줄 사용된 인덱스를 철저히 제외**
-        size = 3
-        top_values = []
-        bottom_values = []
+                used_index_total.update(block_range)
+                used_index_total.update(matched)
 
-        for fn in transform_modes.values():
-            block, block_range = get_non_overlapping_block(size, all_data, used_index_total)  # 🚀 4줄과 중복 방지
-            if not block:
-                continue
+                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
+                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
-            flow = fn(block)
-            top, bottom, matched = find_all_matches(flow, all_data, used_index_total)
+            top_counter = Counter(top_values)
+            bottom_counter = Counter(bottom_values)
 
-            used_index_total.update(block_range)
-            used_index_total.update(matched)
-
-            top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
-            bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
-
-        top_counter = Counter(top_values)
-        bottom_counter = Counter(bottom_values)
-
-        result[f"4줄 블럭 Top3 요약"] = {
-            "Top3상단": [v[0] for v in top_counter.most_common(3)],
-            "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
-        }
-
-        result[f"3줄 블럭 Top3 요약"] = {
-            "Top3상단": [v[0] for v in top_counter.most_common(3)],
-            "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
-        }
+            result[f"{size}줄 블럭 Top3 요약"] = {
+                "Top3상단": [v[0] for v in top_counter.most_common(3)],
+                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
+            }
 
         return jsonify(result)
 
