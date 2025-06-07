@@ -1,10 +1,9 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
 from collections import Counter
-import numpy as np
 
 load_dotenv()
 
@@ -18,103 +17,108 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def convert(entry):
+    side = '좌' if entry['start_point'] == 'LEFT' else '우'
+    count = str(entry['line_count'])
+    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
+    return f"{side}{count}{oe}"
+
+def parse_block(s):
+    return s[0], s[1:-1], s[-1]
+
+def flip_full(block):
+    return [('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
+
+def flip_start(block):
+    return [s + ('4' if c == '3' else '3') + ('홀' if o == '짝' else '짝') for s, c, o in map(parse_block, block)]
+
+def flip_odd_even(block):
+    return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
+
+def find_all_matches(block, full_data):
+    top_matches = []
+    bottom_matches = []
+    block_len = len(block)
+
+    for i in reversed(range(len(full_data) - block_len)):
+        candidate = full_data[i:i + block_len]
+        if candidate == block:
+            top_index = i - 1
+            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
+            top_matches.append({
+                "값": top_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+            bottom_index = i + block_len
+            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
+            bottom_matches.append({
+                "값": bottom_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+    if not top_matches:
+        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+    if not bottom_matches:
+        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+
+    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+
+    return top_matches, bottom_matches
+
+@app.route("/predict_pure_3block")
+def predict_pure_3block():
     try:
-        start = entry.get('start_point', '')
-        line = entry.get('line_count', '')
-        oe = entry.get('odd_even', '')
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
 
-        if start not in ['LEFT', 'RIGHT'] or line not in [3, 4] or oe not in ['EVEN', 'ODD']:
-            raise ValueError("Invalid entry")
+        raw = response.data
+        all_data = [convert(d) for d in raw]
 
-        side = '좌' if start == 'LEFT' else '우'
-        count = str(line)
-        parity = '짝' if oe == 'EVEN' else '홀'
-        return f"{side}{count}{parity}"
-    except:
-        return '❌ 없음'
+        # 3줄 블럭만 필터링
+        three_only_data = [x for x in all_data if '3' in x]
+        if len(three_only_data) < 3:
+            return jsonify({"error": "3줄 블럭 데이터가 부족합니다."})
 
-def meta_flow_predict(data):
-    recent = data[:100]
-    counter = Counter(recent)
-    total = sum(counter.values())
-    score_map = {k: 1 - (v/total)**1.2 for k, v in counter.items()}
-    return max(score_map, key=score_map.get)
+        base_block = three_only_data[:3]
+        transform_modes = {
+            "원본": lambda x: x,
+            "대칭": flip_full,
+            "시작점반전": flip_start,
+            "홀짝반전": flip_odd_even
+        }
 
-def low_frequency_predict(data):
-    mid_range = data[50:200]
-    counter = Counter(mid_range)
-    total = sum(counter.values())
-    score_map = {k: (1 - (v / total))**1.8 for k, v in counter.items()}
-    return max(score_map, key=score_map.get)
+        all_predictions = []
+        per_mode = {}
 
-def reverse_bias_predict(data):
-    long_range = data[:1000]
-    bias = {'좌': 0, '우': 0, '홀': 0, '짝': 0, '3': 0, '4': 0}
-    for d in long_range:
-        if d.startswith('좌'): bias['좌'] += 1
-        if d.startswith('우'): bias['우'] += 1
-        if '홀' in d: bias['홀'] += 1
-        if '짝' in d: bias['짝'] += 1
-        if '3' in d: bias['3'] += 1
-        if '4' in d: bias['4'] += 1
-    result = ''
-    result += '우' if bias['좌'] > bias['우'] else '좌'
-    result += '4' if bias['3'] > bias['4'] else '3'
-    result += '짝' if bias['홀'] > bias['짝'] else '홀'
-    return result
+        for name, fn in transform_modes.items():
+            transformed = fn(base_block)
+            top_matches, bottom_matches = find_all_matches(transformed, three_only_data)
+            preds = [m['값'] for m in bottom_matches if m['값'] != '❌ 없음']
+            per_mode[name] = preds
+            all_predictions.extend(preds)
 
-def start_position_predict(data):
-    window = data[100:300]
-    left = sum(1 for d in window if d.startswith('좌'))
-    right = len(window) - left
-    return '좌3홀' if left > right else '우4짝'
+        balance = Counter(all_predictions)
 
-def periodic_pattern_predict(data):
-    pattern_range = data[200:1000]
-    score = Counter()
-    for offset in [5, 13, 21]:
-        for i in range(offset, len(pattern_range)):
-            if pattern_range[i] == pattern_range[i - offset]:
-                score[pattern_range[i]] += 1
-    return max(score, key=score.get) if score else '❌ 없음'
+        return jsonify({
+            "예측회차": int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999,
+            "기준블럭": base_block,
+            "방향별예측": per_mode,
+            "예측발란스": dict(balance.most_common())
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/")
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
-
-@app.route("/meta_predict")
-def meta_predict():
-    try:
-        response = supabase.table(SUPABASE_TABLE).select("*")\
-            .order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
-        raw = response.data
-        all_data = [convert(d) for d in raw][::-1]
-
-        diverse_preds = {
-            "시작 위치": start_position_predict(all_data),
-            "주기 반복": periodic_pattern_predict(all_data),
-            "편향 반전": reverse_bias_predict(all_data),
-            "흐름 기반": meta_flow_predict(all_data),
-            "희귀 기반": low_frequency_predict(all_data)
-        }
-
-        return jsonify({
-            "예측회차": int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999,
-            "다양한예측값": diverse_preds
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/latest_blocks")
-def latest_blocks():
-    try:
-        response = supabase.table(SUPABASE_TABLE).select("*")\
-            .order("reg_date", desc=True).order("date_round", desc=True).limit(5).execute()
-        raw = response.data
-        blocks = [convert(d) for d in raw][::-1]
-        return jsonify({"blocks": blocks})
-    except Exception as e:
-        return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT") or 5000)

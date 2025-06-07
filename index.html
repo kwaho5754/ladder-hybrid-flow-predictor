@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>사다리 머신 예측</title>
+  <title>3줄 블럭 예측</title>
   <style>
     body {
       font-family: 'Pretendard', sans-serif;
@@ -18,7 +18,7 @@
       padding: 1.5rem;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       margin: 1rem auto;
-      max-width: 500px;
+      max-width: 600px;
     }
     h1 {
       font-size: 1.6rem;
@@ -33,16 +33,20 @@
     .error {
       color: red;
     }
-    .predictions {
+    .section {
       text-align: left;
       margin-top: 1rem;
       font-size: 1rem;
+    }
+    .section strong {
+      display: inline-block;
+      width: 100px;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>🧠 다양한 관점 기반 예측</h1>
+    <h1>🧠 3줄 블럭 예측 (4방향 분석)</h1>
     <div id="result">⏳ 예측 중...</div>
   </div>
 
@@ -52,20 +56,31 @@
   </div>
 
   <script>
-    fetch("/meta_predict")
+    fetch("/predict_pure_3block")
       .then(res => res.json())
       .then(data => {
         if (data.error) {
           document.getElementById("result").innerHTML =
             `<div class="error">❌ 예측 실패: ${data.error}</div>`;
-        } else {
-          const preds = data.다양한예측값;
-          const html = [`✅ 예측 회차: ${data.예측회차}`];
-          for (const [key, value] of Object.entries(preds)) {
-            html.push(`<strong>${key}</strong>: ${value}`);
-          }
-          document.getElementById("result").innerHTML = `<div class="predictions">${html.join('<br/>')}</div>`;
+          return;
         }
+
+        const html = [`✅ 예측 회차: ${data.예측회차}`];
+        html.push(`<div class="section"><strong>기준블럭</strong>: ${data.기준블럭.join(" → ")}</div>`);
+
+        html.push(`<div class="section"><strong>방향별 예측</strong>:`);
+        for (const [dir, preds] of Object.entries(data.방향별예측)) {
+          html.push(`<div>🔹 ${dir}: ${preds.join(", ")}</div>`);
+        }
+        html.push(`</div>`);
+
+        html.push(`<div class="section"><strong>예측 발란스</strong>:`);
+        for (const [val, count] of Object.entries(data.예측발란스)) {
+          html.push(`<div>🔸 ${val}: ${count}회</div>`);
+        }
+        html.push(`</div>`);
+
+        document.getElementById("result").innerHTML = html.join("");
       })
       .catch(err => {
         document.getElementById("result").innerHTML =
