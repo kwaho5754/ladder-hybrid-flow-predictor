@@ -34,14 +34,20 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data):
+def find_all_matches(block, full_data, used_indices):
     top_matches = []
     bottom_matches = []
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
+        block_range = range(i, i + block_len)
+        if any(idx in used_indices for idx in block_range):
+            continue
+
         candidate = full_data[i:i + block_len]
         if candidate == block:
+            used_indices.update(block_range)
+
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
             top_matches.append({
@@ -68,9 +74,54 @@ def find_all_matches(block, full_data):
 
     return top_matches, bottom_matches
 
-@app.route("/predict_pure_3block")
-def predict_pure_3block():
+@app.route("/")
+def home():
+    return send_from_directory(os.path.dirname(__file__), "index.html")
+
+@app.route("/predict")
+def predict():
     try:
+        mode = request.args.get("mode", "3block_orig")
+        size = int(mode[0])
+
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
+        raw = response.data
+        round_num = int(raw[0]["date_round"]) + 1
+        all_data = [convert(d) for d in raw]
+        recent_flow = all_data[:size]
+
+        if "flip_full" in mode:
+            flow = flip_full(recent_flow)
+        elif "flip_start" in mode:
+            flow = flip_start(recent_flow)
+        elif "flip_odd_even" in mode:
+            flow = flip_odd_even(recent_flow)
+        else:
+            flow = recent_flow
+
+        # 이 경우엔 겹침 허용
+        top, bottom = find_all_matches(flow, all_data, used_indices=set())
+
+        return jsonify({
+            "예측회차": round_num,
+            "상단값들": top,
+            "하단값들": bottom
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/predict_top3_summary")
+def predict_top3_summary():
+    try:
+        from itertools import chain
+
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -81,44 +132,38 @@ def predict_pure_3block():
         raw = response.data
         all_data = [convert(d) for d in raw]
 
-        # 3줄 블럭만 필터링
-        three_only_data = [x for x in all_data if '3' in x]
-        if len(three_only_data) < 3:
-            return jsonify({"error": "3줄 블럭 데이터가 부족합니다."})
+        result = {}
+        used_indices = set()
 
-        base_block = three_only_data[:3]
-        transform_modes = {
-            "원본": lambda x: x,
-            "대칭": flip_full,
-            "시작점반전": flip_start,
-            "홀짝반전": flip_odd_even
-        }
+        for size in [6, 5, 4, 3]:
+            recent_block = all_data[:size]
+            transform_modes = {
+                "flip_full": flip_full,
+                "flip_start": flip_start,
+                "flip_odd_even": flip_odd_even
+            }
 
-        all_predictions = []
-        per_mode = {}
+            top_values = []
+            bottom_values = []
 
-        for name, fn in transform_modes.items():
-            transformed = fn(base_block)
-            top_matches, bottom_matches = find_all_matches(transformed, three_only_data)
-            preds = [m['값'] for m in bottom_matches if m['값'] != '❌ 없음']
-            per_mode[name] = preds
-            all_predictions.extend(preds)
+            for fn in transform_modes.values():
+                flow = fn(recent_block)
+                top, bottom = find_all_matches(flow, all_data, used_indices)
+                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
+                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
-        balance = Counter(all_predictions)
+            top_counter = Counter(top_values)
+            bottom_counter = Counter(bottom_values)
 
-        return jsonify({
-            "예측회차": int(raw[0]["date_round"]) + 1 if "date_round" in raw[0] else 9999,
-            "기준블럭": base_block,
-            "방향별예측": per_mode,
-            "예측발란스": dict(balance.most_common())
-        })
+            result[f"{size}줄 블럭 Top3 요약"] = {
+                "Top3상단": [v[0] for v in top_counter.most_common(3)],
+                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
+            }
+
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": str(e)})
-
-@app.route("/")
-def home():
-    return send_from_directory(os.path.dirname(__file__), "index.html")
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT") or 5000)
