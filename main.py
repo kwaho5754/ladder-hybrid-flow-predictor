@@ -78,7 +78,7 @@ def get_next_block(all_data, size, used_indices):
     for i in range(len(all_data) - size + 1):
         block_range = range(i, i + size)
         if all(idx not in used_indices for idx in block_range):
-            return all_data[i:i + size], block_range
+            return all_data[i:i + size], set(block_range)
     return None, None
 
 @app.route("/")
@@ -137,14 +137,14 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        used_indices = set()
+        used_indices = set()  # ✅ 매칭과 블럭 추출 모두에 사용
 
         for size in [6, 5, 4, 3]:
             recent_block, block_range = get_next_block(all_data, size, used_indices)
             if not recent_block:
                 continue
 
-            used_indices.update(block_range)
+            used_indices.update(block_range)  # ✅ 이 블럭의 위치는 이후 분석에서 제외
 
             transform_modes = {
                 "flip_full": flip_full,
