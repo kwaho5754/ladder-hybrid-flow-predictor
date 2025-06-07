@@ -42,8 +42,10 @@ def find_all_matches(block, full_data, match_exclusion_indices):
 
     for i in reversed(range(len(full_data) - block_len)):
         block_range = range(i, i + block_len)
+
+        # ✅ 이전에 매칭된 위치와 겹치면 탐색 skip
         if any(idx in match_exclusion_indices for idx in block_range):
-            continue  # ✅ 이전 블럭에서 매칭된 인덱스면 skip
+            continue
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
@@ -131,10 +133,10 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        match_exclusion_indices = set()
+        match_exclusion_indices = set()  # ✅ 탐색에 사용된 위치들 누적
 
         for size in [6, 5, 4, 3]:
-            block = all_data[:size]  # ✅ 생성은 항상 A0~A(size-1) 기준으로
+            base_block = all_data[:size]  # ✅ 동일한 A0부터 블럭 생성
 
             transform_modes = {
                 "flip_full": flip_full,
@@ -146,9 +148,9 @@ def predict_top3_summary():
             bottom_values = []
 
             for fn in transform_modes.values():
-                transformed = fn(block)
+                transformed = fn(base_block)
                 top, bottom, matched = find_all_matches(transformed, all_data, match_exclusion_indices)
-                match_exclusion_indices.update(matched)  # ✅ 이 위치들은 이후 탐색 금지
+                match_exclusion_indices.update(matched)  # ✅ 이후 블럭에서 이 구간은 탐색하지 않음
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
