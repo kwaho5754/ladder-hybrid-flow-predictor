@@ -103,9 +103,7 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        used_index_dummy = set()  # 단일 예측 시에는 제한 없음
-        recent_flow = get_valid_recent_block(size, all_data, used_index_dummy)
-
+        recent_flow = all_data[:size]
         if "flip_full" in mode:
             flow = flip_full(recent_flow)
         elif "flip_start" in mode:
@@ -140,12 +138,9 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-
-        used_index_6 = set()
-        used_index_5 = set()
         used_index_4 = set()
 
-        for size in [6, 5, 4, 3]:
+        for size in [4, 3]:
             transform_modes = {
                 "flip_full": flip_full,
                 "flip_start": flip_start,
@@ -156,13 +151,9 @@ def predict_top3_summary():
             bottom_values = []
 
             for fn in transform_modes.values():
-                if size == 6:
-                    recent_block = get_valid_recent_block(size, all_data, used_index_6)
-                elif size == 5:
-                    recent_block = get_valid_recent_block(size, all_data, used_index_6)
-                elif size == 4:
-                    recent_block = get_valid_recent_block(size, all_data, used_index_5)
-                elif size == 3:
+                if size == 4:
+                    recent_block = get_valid_recent_block(size, all_data, set())
+                else:
                     recent_block = get_valid_recent_block(size, all_data, used_index_4)
 
                 if not recent_block:
@@ -170,17 +161,11 @@ def predict_top3_summary():
 
                 flow = fn(recent_block)
 
-                if size == 6:
-                    top, bottom, matched = find_all_matches(flow, all_data, used_index_6)
-                    used_index_6.update(matched)
-                elif size == 5:
-                    top, bottom, matched = find_all_matches(flow, all_data, used_index_6)
-                    used_index_5.update(matched)
-                elif size == 4:
-                    top, bottom, matched = find_all_matches(flow, all_data, used_index_5)
+                if size == 4:
+                    top, bottom, matched = find_all_matches(flow, all_data)
                     used_index_4.update(matched)
-                elif size == 3:
-                    top, bottom, matched = find_all_matches(flow, all_data, used_index_4)
+                else:
+                    top, bottom, _ = find_all_matches(flow, all_data, used_index_4)
 
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
