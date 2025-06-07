@@ -3,7 +3,7 @@ from flask_cors import CORS
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
-from collections import Counter
+from collections import defaultdict
 
 load_dotenv()
 
@@ -70,17 +70,14 @@ def find_all_matches(block, full_data, used_indices):
     if not bottom_matches:
         bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
 
-    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
-    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
-
     return top_matches, bottom_matches, matched_indices
 
 @app.route("/")
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
 
-@app.route("/predict_top3_summary")
-def predict_top3_summary():
+@app.route("/predict_full_matches")
+def predict_full_matches():
     try:
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
@@ -92,42 +89,41 @@ def predict_top3_summary():
         raw = response.data
         all_data = [convert(d) for d in raw]
 
-        result = {}
+        result = defaultdict(dict)
 
         used_6 = set()
         used_5 = set()
         used_4 = set()
 
-        for size, name, used_exclude in [
-            (6, "6줄 블럭 Top3 요약", set()),
-            (5, "5줄 블럭 Top3 요약", used_6),
-            (4, "4줄 블럭 Top3 요약", used_5),
-            (3, "3줄 블럭 Top3 요약", used_4),
+        for size, label, used_exclude in [
+            (6, "6줄 블럭", set()),
+            (5, "5줄 블럭", used_6),
+            (4, "4줄 블럭", used_5),
+            (3, "3줄 블럭", used_4),
         ]:
             base_block = all_data[:size]
             transform_modes = {
-                "flip_full": flip_full,
-                "flip_start": flip_start,
-                "flip_odd_even": flip_odd_even
+                "원본": lambda x: x,
+                "대칭": flip_full,
+                "시작점변형": flip_start,
+                "홀짝변형": flip_odd_even
             }
-            top_values, bottom_values = [], []
 
-            for fn in transform_modes.values():
+            for mode_name, fn in transform_modes.items():
                 transformed = fn(base_block)
                 top, bottom, matched = find_all_matches(transformed, all_data, used_exclude)
+
                 if size == 6:
                     used_6.update(matched)
                 elif size == 5:
                     used_5.update(matched)
                 elif size == 4:
                     used_4.update(matched)
-                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
-                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
-            result[name] = {
-                "Top3상단": [v[0] for v in Counter(top_values).most_common(3)],
-                "Top3하단": [v[0] for v in Counter(bottom_values).most_common(3)]
-            }
+                result[label][mode_name] = {
+                    "상단": top,
+                    "하단": bottom
+                }
 
         return jsonify(result)
 
