@@ -74,6 +74,13 @@ def find_all_matches(block, full_data, used_indices):
 
     return top_matches, bottom_matches
 
+def get_next_block(all_data, size, used_indices):
+    for i in range(len(all_data) - size + 1):
+        block_range = range(i, i + size)
+        if all(idx not in used_indices for idx in block_range):
+            return all_data[i:i + size], block_range
+    return None, None
+
 @app.route("/")
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
@@ -105,7 +112,6 @@ def predict():
         else:
             flow = recent_flow
 
-        # 이 경우엔 겹침 허용
         top, bottom = find_all_matches(flow, all_data, used_indices=set())
 
         return jsonify({
@@ -120,8 +126,6 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        from itertools import chain
-
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -136,7 +140,12 @@ def predict_top3_summary():
         used_indices = set()
 
         for size in [6, 5, 4, 3]:
-            recent_block = all_data[:size]
+            recent_block, block_range = get_next_block(all_data, size, used_indices)
+            if not recent_block:
+                continue
+
+            used_indices.update(block_range)
+
             transform_modes = {
                 "flip_full": flip_full,
                 "flip_start": flip_start,
