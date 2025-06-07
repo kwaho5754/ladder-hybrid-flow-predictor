@@ -3,7 +3,7 @@ from flask_cors import CORS
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
-from collections import defaultdict
+from collections import Counter
 
 load_dotenv()
 
@@ -34,33 +34,46 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data, used_indices):
-    result = []
-    matched_indices = []
+def find_all_matches(block, full_data, used_set):
+    top_matches = []
+    bottom_matches = []
+    matched_indices = set()
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
-        block_range = range(i, i + block_len)
-        if any(idx in used_indices for idx in block_range):
+        block_range = set(range(i, i + block_len))
+        if block_range & used_set:
             continue
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
-            matched_indices.extend(block_range)
+            matched_indices.update(block_range)
+
             top_index = i - 1
-            bottom_index = i + block_len
-
-            top_val = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            bottom_val = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-
-            result.append({
+            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
+            top_matches.append({
+                "값": top_pred,
                 "블럭": ">".join(block),
-                "순번": i + 1,
-                "상단": top_val,
-                "하단": bottom_val
+                "순번": i + 1
             })
 
-    return result, matched_indices
+            bottom_index = i + block_len
+            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
+            bottom_matches.append({
+                "값": bottom_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
+
+    if not top_matches:
+        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+    if not bottom_matches:
+        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+
+    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
+
+    return top_matches, bottom_matches, matched_indices
 
 @app.route("/")
 def home():
@@ -69,6 +82,9 @@ def home():
 @app.route("/predict")
 def predict():
     try:
+        mode = request.args.get("mode", "3block_orig")
+        size = int(mode[0])
+
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -77,37 +93,45 @@ def predict():
             .execute()
 
         raw = response.data
+        round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
-        result = defaultdict(dict)
+        recent_flow = all_data[:size]
 
-        used_6 = set()
-        used_5 = set()
-        used_4 = set()
+        if "flip_full" in mode:
+            flow = flip_full(recent_flow)
+        elif "flip_start" in mode:
+            flow = flip_start(recent_flow)
+        elif "flip_odd_even" in mode:
+            flow = flip_odd_even(recent_flow)
+        else:
+            flow = recent_flow
 
-        block_defs = [
-            (6, "6줄 블럭", set(), used_6),
-            (5, "5줄 블럭", used_6, used_5),
-            (4, "4줄 블럭", used_5, used_4),
-            (3, "3줄 블럭", used_4, None),
-        ]
+        used_6, used_5, used_4 = set(), set(), set()
+        used_set = set()
 
-        for size, label, exclude_set, update_set in block_defs:
-            base_block = all_data[:size]
-            transform_modes = {
-                "원본": lambda x: x,
-                "대칭": flip_full,
-                "시작점": flip_start,
-                "홀짝": flip_odd_even
-            }
+        if size == 6:
+            used_set = set()
+        elif size == 5:
+            used_set = used_6
+        elif size == 4:
+            used_set = used_5
+        elif size == 3:
+            used_set = used_4
 
-            for mode_name, fn in transform_modes.items():
-                transformed = fn(base_block)
-                matches, matched = find_all_matches(transformed, all_data, exclude_set)
-                if update_set is not None:
-                    update_set.update(matched)
-                result[label][mode_name] = matches
+        top, bottom, matched = find_all_matches(flow, all_data, used_set)
 
-        return jsonify(result)
+        if size == 6:
+            used_6.update(matched)
+        elif size == 5:
+            used_5.update(matched)
+        elif size == 4:
+            used_4.update(matched)
+
+        return jsonify({
+            "예측회차": round_num,
+            "상단값들": top,
+            "하단값들": bottom
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)})
