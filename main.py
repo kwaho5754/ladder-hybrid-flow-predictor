@@ -35,8 +35,7 @@ def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
 def find_all_matches(block, full_data, used_indices):
-    top_matches = []
-    bottom_matches = []
+    result = []
     matched_indices = []
     block_len = len(block)
 
@@ -48,36 +47,27 @@ def find_all_matches(block, full_data, used_indices):
         candidate = full_data[i:i + block_len]
         if candidate == block:
             matched_indices.extend(block_range)
-
             top_index = i - 1
-            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            top_matches.append({
-                "값": top_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
-
             bottom_index = i + block_len
-            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-            bottom_matches.append({
-                "값": bottom_pred,
+
+            top_val = full_data[top_index] if top_index >= 0 else "❌ 없음"
+            bottom_val = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
+
+            result.append({
                 "블럭": ">".join(block),
-                "순번": i + 1
+                "순번": i + 1,
+                "상단": top_val,
+                "하단": bottom_val
             })
 
-    if not top_matches:
-        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-    if not bottom_matches:
-        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-
-    return top_matches, bottom_matches, matched_indices
+    return result, matched_indices
 
 @app.route("/")
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
 
-@app.route("/predict_full_matches")
-def predict_full_matches():
+@app.route("/predict")
+def predict():
     try:
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
@@ -88,7 +78,6 @@ def predict_full_matches():
 
         raw = response.data
         all_data = [convert(d) for d in raw]
-
         result = defaultdict(dict)
 
         used_6 = set()
@@ -107,21 +96,16 @@ def predict_full_matches():
             transform_modes = {
                 "원본": lambda x: x,
                 "대칭": flip_full,
-                "시작점변형": flip_start,
-                "홀짝변형": flip_odd_even
+                "시작점": flip_start,
+                "홀짝": flip_odd_even
             }
 
             for mode_name, fn in transform_modes.items():
                 transformed = fn(base_block)
-                top, bottom, matched = find_all_matches(transformed, all_data, exclude_set)
-
+                matches, matched = find_all_matches(transformed, all_data, exclude_set)
                 if update_set is not None:
                     update_set.update(matched)
-
-                result[label][mode_name] = {
-                    "상단": top,
-                    "하단": bottom
-                }
+                result[label][mode_name] = matches
 
         return jsonify(result)
 
