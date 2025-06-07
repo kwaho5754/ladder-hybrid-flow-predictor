@@ -31,7 +31,6 @@
 <body>
   <h1>🔮 사다리 블럭 예측 결과</h1>
 
-  <!-- ✅ Top3 요약 테이블 (3줄 + 4줄 블럭, 원본 제외) -->
   <div class="summary-box">
     <table>
       <thead>
@@ -42,8 +41,7 @@
         </tr>
       </thead>
       <tbody id="top3-summary-body">
-        <!-- JS에서 채워짐 -->
-      </tbody>
+        </tbody>
     </table>
   </div>
 
@@ -53,6 +51,7 @@
     const modes = [
       "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
       "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even"
+      // 5줄, 6줄 블럭 모드 제거됨
     ];
 
     const modeTitles = {
@@ -109,6 +108,9 @@
       const data = await res.json();
       const tbody = document.getElementById("top3-summary-body");
 
+      // 기존 내용을 지우고 새로 그립니다.
+      tbody.innerHTML = ''; 
+
       for (const key of Object.keys(data)) {
         const info = data[key];
         const row = document.createElement("tr");
@@ -123,6 +125,7 @@
 
     async function loadResults() {
       const resultContainer = document.getElementById("results");
+      resultContainer.innerHTML = ''; // 기존 내용을 지우고 새로 그립니다.
       const sectionMap = {};
 
       for (const mode of modes) {
@@ -150,12 +153,35 @@
           sectionMap[sectionKey].appendChild(createCard(mode, data));
         } catch (e) {
           console.error(`❌ 오류: ${mode} 예측 결과 불러오기 실패`, e);
+          // 오류 발생 시에도 카드 표시 (선택 사항)
+          const errorCard = document.createElement("div");
+          errorCard.className = "card";
+          errorCard.innerHTML = `<h3>${mode}</h3><p>예측 결과를 불러오는데 실패했습니다: ${e.message}</p>`;
+          const sectionKey = getModeKey(mode);
+          if (!sectionMap[sectionKey]) {
+            const section = document.createElement("div");
+            section.className = "section";
+            const title = document.createElement("h2");
+            title.textContent = modeTitles[sectionKey];
+            section.appendChild(title);
+            const row = document.createElement("div");
+            row.className = "card-row";
+            section.appendChild(row);
+            resultContainer.appendChild(section);
+            sectionMap[sectionKey] = row;
+          }
+          sectionMap[sectionKey].appendChild(errorCard);
         }
       }
     }
 
+    // 초기 로딩
     loadTop3Summary();
     loadResults();
+
+    // 일정 시간 간격으로 새로고침 (예: 5분마다)
+    // setInterval(loadTop3Summary, 5 * 60 * 1000);
+    // setInterval(loadResults, 5 * 60 * 1000);
   </script>
 </body>
 </html>
