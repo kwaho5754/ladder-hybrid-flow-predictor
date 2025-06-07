@@ -47,6 +47,7 @@ def find_all_matches(block, full_data, used_index=set()):
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
+            used_index.update(block_range)
             matched_indices.update(block_range)
 
             top_index = i - 1
