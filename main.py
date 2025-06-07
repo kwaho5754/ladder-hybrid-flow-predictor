@@ -121,7 +121,6 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        from itertools import chain
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -162,7 +161,7 @@ def predict_top3_summary():
                     top, bottom, matched = find_all_matches(flow, all_data, used_index_5)
                     used_index_4.update(matched)
                 elif size == 3:
-                    top, bottom, _ = find_all_matches(flow, all_data, used_index_4)
+                    top, bottom, matched = find_all_matches(flow, all_data, used_index_4)
 
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
