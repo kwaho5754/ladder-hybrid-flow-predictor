@@ -95,12 +95,14 @@ def predict_full_matches():
         used_5 = set()
         used_4 = set()
 
-        for size, label, used_exclude in [
-            (6, "6줄 블럭", set()),
-            (5, "5줄 블럭", used_6),
-            (4, "4줄 블럭", used_5),
-            (3, "3줄 블럭", used_4),
-        ]:
+        block_defs = [
+            (6, "6줄 블럭", set(), used_6),
+            (5, "5줄 블럭", used_6, used_5),
+            (4, "4줄 블럭", used_5, used_4),
+            (3, "3줄 블럭", used_4, None),
+        ]
+
+        for size, label, exclude_set, update_set in block_defs:
             base_block = all_data[:size]
             transform_modes = {
                 "원본": lambda x: x,
@@ -111,14 +113,10 @@ def predict_full_matches():
 
             for mode_name, fn in transform_modes.items():
                 transformed = fn(base_block)
-                top, bottom, matched = find_all_matches(transformed, all_data, used_exclude)
+                top, bottom, matched = find_all_matches(transformed, all_data, exclude_set)
 
-                if size == 6:
-                    used_6.update(matched)
-                elif size == 5:
-                    used_5.update(matched)
-                elif size == 4:
-                    used_4.update(matched)
+                if update_set is not None:
+                    update_set.update(matched)
 
                 result[label][mode_name] = {
                     "상단": top,
