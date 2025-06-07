@@ -37,6 +37,7 @@ def flip_odd_even(block):
 def find_all_matches(block, full_data, used_index=set()):
     top_matches = []
     bottom_matches = []
+    matched_indices = set()
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
@@ -46,7 +47,7 @@ def find_all_matches(block, full_data, used_index=set()):
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
-            used_index.update(block_range)
+            matched_indices.update(block_range)
 
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
@@ -72,7 +73,7 @@ def find_all_matches(block, full_data, used_index=set()):
     top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
     bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
 
-    return top_matches, bottom_matches
+    return top_matches, bottom_matches, matched_indices
 
 @app.route("/")
 def home():
@@ -106,7 +107,7 @@ def predict():
             flow = recent_flow
 
         used_index = set()
-        top, bottom = find_all_matches(flow, all_data, used_index)
+        top, bottom, _ = find_all_matches(flow, all_data, used_index)
 
         return jsonify({
             "예측회차": round_num,
@@ -152,16 +153,16 @@ def predict_top3_summary():
                 flow = fn(recent_block)
 
                 if size == 6:
-                    top, bottom = find_all_matches(flow, all_data, used_index_6)
-                    used_index_6.update(set(range(len(all_data) - size)))
+                    top, bottom, matched = find_all_matches(flow, all_data, used_index_6)
+                    used_index_6.update(matched)
                 elif size == 5:
-                    top, bottom = find_all_matches(flow, all_data, used_index_6)
-                    used_index_5.update(set(range(len(all_data) - size)))
+                    top, bottom, matched = find_all_matches(flow, all_data, used_index_6)
+                    used_index_5.update(matched)
                 elif size == 4:
-                    top, bottom = find_all_matches(flow, all_data, used_index_5)
-                    used_index_4.update(set(range(len(all_data) - size)))
+                    top, bottom, matched = find_all_matches(flow, all_data, used_index_5)
+                    used_index_4.update(matched)
                 elif size == 3:
-                    top, bottom = find_all_matches(flow, all_data, used_index_4)
+                    top, bottom, _ = find_all_matches(flow, all_data, used_index_4)
 
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
