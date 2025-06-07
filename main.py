@@ -75,12 +75,12 @@ def find_all_matches(block, full_data, used_index=set()):
 
     return top_matches, bottom_matches, matched_indices
 
-def get_valid_recent_block(size, all_data, used_index):
+def get_non_overlapping_block(size, all_data, used_index):
     for i in range(len(all_data) - size):
         block_range = set(range(i, i + size))
         if not block_range & used_index:
-            return all_data[i:i+size]
-    return []
+            return all_data[i:i+size], block_range
+    return [], set()
 
 @app.route("/")
 def home():
@@ -151,21 +151,17 @@ def predict_top3_summary():
             bottom_values = []
 
             for fn in transform_modes.values():
-                if size == 4:
-                    recent_block = get_valid_recent_block(size, all_data, set())
-                else:
-                    recent_block = get_valid_recent_block(size, all_data, used_index_4)
-
-                if not recent_block:
+                block, block_range = get_non_overlapping_block(size, all_data, used_index_4)
+                if not block:
                     continue
 
-                flow = fn(recent_block)
+                flow = fn(block)
+                top, bottom, matched = find_all_matches(flow, all_data, used_index_4)
 
                 if size == 4:
-                    top, bottom, matched = find_all_matches(flow, all_data)
                     used_index_4.update(matched)
                 else:
-                    top, bottom, _ = find_all_matches(flow, all_data, used_index_4)
+                    used_index_4.update(block_range)  # prevent overlap from 4줄 매칭에 걸린 블럭 내부
 
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
