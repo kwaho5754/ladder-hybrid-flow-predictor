@@ -34,19 +34,20 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data, used_indices):
+def find_all_matches(block, full_data, match_exclusion_indices):
     top_matches = []
     bottom_matches = []
+    matched_indices = []
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
         block_range = range(i, i + block_len)
-        if any(idx in used_indices for idx in block_range):
-            continue
+        if any(idx in match_exclusion_indices for idx in block_range):
+            continue  # ✅ 이전 블럭에서 매칭된 인덱스면 skip
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
-            used_indices.update(block_range)
+            matched_indices.extend(block_range)
 
             top_index = i - 1
             top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
@@ -72,14 +73,7 @@ def find_all_matches(block, full_data, used_indices):
     top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
     bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:12]
 
-    return top_matches, bottom_matches
-
-def get_next_block(all_data, size, used_indices):
-    for i in range(len(all_data) - size + 1):
-        block_range = range(i, i + size)
-        if all(idx not in used_indices for idx in block_range):
-            return all_data[i:i + size], set(block_range)
-    return None, None
+    return top_matches, bottom_matches, matched_indices
 
 @app.route("/")
 def home():
@@ -112,7 +106,7 @@ def predict():
         else:
             flow = recent_flow
 
-        top, bottom = find_all_matches(flow, all_data, used_indices=set())
+        top, bottom, _ = find_all_matches(flow, all_data, match_exclusion_indices=set())
 
         return jsonify({
             "예측회차": round_num,
@@ -137,14 +131,10 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        used_indices = set()  # ✅ 매칭과 블럭 추출 모두에 사용
+        match_exclusion_indices = set()
 
         for size in [6, 5, 4, 3]:
-            recent_block, block_range = get_next_block(all_data, size, used_indices)
-            if not recent_block:
-                continue
-
-            used_indices.update(block_range)  # ✅ 이 블럭의 위치는 이후 분석에서 제외
+            block = all_data[:size]  # ✅ 생성은 항상 A0~A(size-1) 기준으로
 
             transform_modes = {
                 "flip_full": flip_full,
@@ -156,8 +146,9 @@ def predict_top3_summary():
             bottom_values = []
 
             for fn in transform_modes.values():
-                flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data, used_indices)
+                transformed = fn(block)
+                top, bottom, matched = find_all_matches(transformed, all_data, match_exclusion_indices)
+                match_exclusion_indices.update(matched)  # ✅ 이 위치들은 이후 탐색 금지
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
