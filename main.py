@@ -103,17 +103,17 @@ def predict():
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
 
-        recent_flow = all_data[:size]
+        recent_block, _ = get_non_overlapping_block(size, all_data, set())
         if "flip_full" in mode:
-            flow = flip_full(recent_flow)
+            flow = flip_full(recent_block)
         elif "flip_start" in mode:
-            flow = flip_start(recent_flow)
+            flow = flip_start(recent_block)
         elif "flip_odd_even" in mode:
-            flow = flip_odd_even(recent_flow)
+            flow = flip_odd_even(recent_block)
         else:
-            flow = recent_flow
+            flow = recent_block
 
-        top, bottom, _ = find_all_matches(flow, all_data)
+        top, bottom, _ = find_all_matches(flow, all_data, set())
 
         return jsonify({
             "예측회차": round_num,
@@ -138,7 +138,7 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        used_index_4 = set()
+        used_index_total = set()
 
         for size in [4, 3]:
             transform_modes = {
@@ -151,17 +151,15 @@ def predict_top3_summary():
             bottom_values = []
 
             for fn in transform_modes.values():
-                block, block_range = get_non_overlapping_block(size, all_data, used_index_4)
+                block, block_range = get_non_overlapping_block(size, all_data, used_index_total)
                 if not block:
                     continue
 
                 flow = fn(block)
-                top, bottom, matched = find_all_matches(flow, all_data, used_index_4)
+                top, bottom, matched = find_all_matches(flow, all_data, used_index_total)
 
-                if size == 4:
-                    used_index_4.update(matched)
-                else:
-                    used_index_4.update(block_range)  # prevent overlap from 4줄 매칭에 걸린 블럭 내부
+                used_index_total.update(block_range)
+                used_index_total.update(matched)
 
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
