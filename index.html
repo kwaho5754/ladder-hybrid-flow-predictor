@@ -32,16 +32,15 @@
   <h1>🔮 사다리 블럭 예측 결과</h1>
 
   <div class="summary-box">
+    <h2>📊 화면에 표시된 예측값 통계</h2>
     <table>
       <thead>
         <tr>
-          <th>블럭</th>
-          <th>Top3 상단값</th>
-          <th>Top3 하단값</th>
+          <th>구분</th>
+          <th>값(횟수)</th>
         </tr>
       </thead>
-      <tbody id="top3-summary-body">
-        </tbody>
+      <tbody id="visible-summary-body"></tbody>
     </table>
   </div>
 
@@ -51,7 +50,6 @@
     const modes = [
       "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
       "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even"
-      // 5줄, 6줄 블럭 모드 제거됨
     ];
 
     const modeTitles = {
@@ -103,35 +101,48 @@
       return card;
     }
 
-    async function loadTop3Summary() {
-      const res = await fetch("/predict_top3_summary");
-      const data = await res.json();
-      const tbody = document.getElementById("top3-summary-body");
-
-      // 기존 내용을 지우고 새로 그립니다.
-      tbody.innerHTML = ''; 
-
-      for (const key of Object.keys(data)) {
-        const info = data[key];
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${key.replace(" Top3 요약", "")}</td>
-          <td>${info["Top3상단"].join(", ")}</td>
-          <td>${info["Top3하단"].join(", ")}</td>
-        `;
-        tbody.appendChild(row);
+    function getFrequency(arr) {
+      const counter = {};
+      for (const item of arr) {
+        if (!item || item === "❌ 없음") continue;
+        counter[item] = (counter[item] || 0) + 1;
       }
+      return counter;
+    }
+
+    function formatStat(counter) {
+      return Object.entries(counter)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k}(${v})`)
+        .join(", ");
+    }
+
+    function renderSummary(topCounter, bottomCounter) {
+      const tbody = document.getElementById("visible-summary-body");
+      tbody.innerHTML = `
+        <tr><td>상단값</td><td>${formatStat(topCounter)}</td></tr>
+        <tr><td>하단값</td><td>${formatStat(bottomCounter)}</td></tr>
+      `;
     }
 
     async function loadResults() {
       const resultContainer = document.getElementById("results");
-      resultContainer.innerHTML = ''; // 기존 내용을 지우고 새로 그립니다.
+      resultContainer.innerHTML = '';
       const sectionMap = {};
+
+      const allTopValues = [];
+      const allBottomValues = [];
 
       for (const mode of modes) {
         try {
           const res = await fetch(`/predict?mode=${mode}`);
           const data = await res.json();
+
+          const top = data["상단값들"] || [];
+          const bottom = data["하단값들"] || [];
+
+          allTopValues.push(...top.map(t => t["값"]));
+          allBottomValues.push(...bottom.map(b => b["값"]));
 
           const sectionKey = getModeKey(mode);
           if (!sectionMap[sectionKey]) {
@@ -153,34 +164,15 @@
           sectionMap[sectionKey].appendChild(createCard(mode, data));
         } catch (e) {
           console.error(`❌ 오류: ${mode} 예측 결과 불러오기 실패`, e);
-          const errorCard = document.createElement("div");
-          errorCard.className = "card";
-          errorCard.innerHTML = `<h3>${mode}</h3><p>예측 결과를 불러오는데 실패했습니다: ${e.message}</p>`;
-          const sectionKey = getModeKey(mode);
-          if (!sectionMap[sectionKey]) {
-            const section = document.createElement("div");
-            section.className = "section";
-            const title = document.createElement("h2");
-            title.textContent = modeTitles[sectionKey];
-            section.appendChild(title);
-            const row = document.createElement("div");
-            row.className = "card-row";
-            section.appendChild(row);
-            resultContainer.appendChild(section);
-            sectionMap[sectionKey] = row;
-          }
-          sectionMap[sectionKey].appendChild(errorCard);
         }
       }
+
+      const topCounter = getFrequency(allTopValues);
+      const bottomCounter = getFrequency(allBottomValues);
+      renderSummary(topCounter, bottomCounter);
     }
 
-    // 초기 로딩
-    loadTop3Summary();
     loadResults();
-
-    // 일정 시간 간격으로 새로고침 (예: 5분마다)
-    // setInterval(loadTop3Summary, 5 * 60 * 1000);
-    // setInterval(loadResults, 5 * 60 * 1000);
   </script>
 </body>
 </html>
