@@ -7,10 +7,11 @@
     body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
     h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
     .summary-box {
-      max-width: 700px; margin: 0 auto 2rem auto;
+      max-width: 800px; margin: 0 auto 2rem auto;
       background: #fff; border-radius: 10px;
       box-shadow: 0 0 6px rgba(0,0,0,0.1); padding: 1rem;
     }
+    .summary-box h2 { text-align: center; margin-bottom: 1rem; }
     .summary-box table { width: 100%; border-collapse: collapse; }
     .summary-box th, .summary-box td {
       padding: 0.6rem; border-bottom: 1px solid #ddd; text-align: center;
@@ -31,18 +32,7 @@
 <body>
   <h1>🔮 사다리 블럭 예측 결과</h1>
 
-  <div class="summary-box">
-    <h2>📊 화면에 표시된 예측값 통계</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>구분</th>
-          <th>값(횟수)</th>
-        </tr>
-      </thead>
-      <tbody id="visible-summary-body"></tbody>
-    </table>
-  </div>
+  <div id="grouped-summary-container"></div>
 
   <div id="results"></div>
 
@@ -57,8 +47,8 @@
     };
 
     const transformLabel = {
-      "orig": "원본", "flip_start": "시작점 변형",
-      "flip_odd_even": "홀짝 변형", "flip_full": "완전 대칭"
+      "orig": "원본", "flip_start": "시작점 반전",
+      "flip_odd_even": "홀짝 반전", "flip_full": "완전 대칭"
     };
 
     const getModeKey = (mode) => mode.split("_")[0];
@@ -110,6 +100,34 @@
       return counter;
     }
 
+    function renderGroupedSummary(statsByGroup) {
+      const container = document.getElementById("grouped-summary-container");
+      container.innerHTML = "";
+
+      for (const group in statsByGroup) {
+        const box = document.createElement("div");
+        box.className = "summary-box";
+
+        const title = document.createElement("h2");
+        title.textContent = `📊 ${transformLabel[group]} 통계`;
+        box.appendChild(title);
+
+        const table = document.createElement("table");
+        table.innerHTML = `
+          <thead>
+            <tr><th>구분</th><th>값(횟수)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>상단</td><td>${formatStat(statsByGroup[group].top)}</td></tr>
+            <tr><td>하단</td><td>${formatStat(statsByGroup[group].bottom)}</td></tr>
+          </tbody>
+        `;
+
+        box.appendChild(table);
+        container.appendChild(box);
+      }
+    }
+
     function formatStat(counter) {
       return Object.entries(counter)
         .sort((a, b) => b[1] - a[1])
@@ -117,32 +135,26 @@
         .join(", ");
     }
 
-    function renderSummary(topCounter, bottomCounter) {
-      const tbody = document.getElementById("visible-summary-body");
-      tbody.innerHTML = `
-        <tr><td>상단값</td><td>${formatStat(topCounter)}</td></tr>
-        <tr><td>하단값</td><td>${formatStat(bottomCounter)}</td></tr>
-      `;
-    }
-
     async function loadResults() {
       const resultContainer = document.getElementById("results");
-      resultContainer.innerHTML = '';
+      resultContainer.innerHTML = "";
       const sectionMap = {};
 
-      const allTopValues = [];
-      const allBottomValues = [];
+      const grouped = {
+        orig: { top: [], bottom: [] },
+        flip_full: { top: [], bottom: [] },
+        flip_start: { top: [], bottom: [] },
+        flip_odd_even: { top: [], bottom: [] },
+      };
 
       for (const mode of modes) {
         try {
           const res = await fetch(`/predict?mode=${mode}`);
           const data = await res.json();
 
-          const top = data["상단값들"] || [];
-          const bottom = data["하단값들"] || [];
-
-          allTopValues.push(...top.map(t => t["값"]));
-          allBottomValues.push(...bottom.map(b => b["값"]));
+          const typeKey = mode.split("_").slice(1).join("_");
+          grouped[typeKey].top.push(...(data["상단값들"] || []).map(t => t["값"]));
+          grouped[typeKey].bottom.push(...(data["하단값들"] || []).map(t => t["값"]));
 
           const sectionKey = getModeKey(mode);
           if (!sectionMap[sectionKey]) {
@@ -167,9 +179,15 @@
         }
       }
 
-      const topCounter = getFrequency(allTopValues);
-      const bottomCounter = getFrequency(allBottomValues);
-      renderSummary(topCounter, bottomCounter);
+      const stats = {};
+      for (const group in grouped) {
+        stats[group] = {
+          top: getFrequency(grouped[group].top),
+          bottom: getFrequency(grouped[group].bottom)
+        };
+      }
+
+      renderGroupedSummary(stats);
     }
 
     loadResults();
