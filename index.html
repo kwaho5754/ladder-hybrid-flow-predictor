@@ -6,107 +6,93 @@
   <style>
     body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
     h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
-    .summary-box {
-      max-width: 800px; margin: 0 auto 2rem auto;
-      background: #fff; border-radius: 10px;
-      box-shadow: 0 0 6px rgba(0,0,0,0.1); padding: 1rem;
+    .box {
+      background: #fff; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 800px; margin: 2rem auto; padding: 1.5rem;
     }
-    .summary-box h2 { text-align: center; margin-bottom: 1rem; }
-    .summary-box table { width: 100%; border-collapse: collapse; }
-    .summary-box th, .summary-box td {
-      padding: 0.6rem; border-bottom: 1px solid #ddd; text-align: center;
-    }
-    .summary-box th { background: #eef2ff; }
+    h2 { font-size: 1.4rem; margin-bottom: 1rem; color: #333; }
+    ul, ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.5rem; }
+    p { margin: 0.4rem 0; }
+    .highlight { font-weight: bold; color: #003366; }
   </style>
 </head>
 <body>
   <h1>🔮 사다리 블럭 예측 결과</h1>
 
-  <div id="summary-3"></div>
-  <div id="summary-4"></div>
+  <section class="box">
+    <h2>📂 현재 구조 기반 예측</h2>
+    <p>예측 회차: <span id="round-num"></span></p>
+    <p>기준 블럭: <span id="recent-block"></span></p>
+    <p>🔺 상단 예측 Top3</p>
+    <ul id="top-predictions"></ul>
+    <p>🔻 하단 예측 Top3</p>
+    <ul id="bottom-predictions"></ul>
+  </section>
+
+  <section class="box">
+    <h2>⏩ 미래 흐름 기반 예측</h2>
+    <p>기준 블럭: <span id="forward-block"></span></p>
+    <p>📈 이후 자주 나온 Top3 값:</p>
+    <ol id="forward-top3"></ol>
+  </section>
+
+  <section class="box">
+    <h2>📊 전체 빈도 기반 상단 예측</h2>
+    <ul id="global-top3"></ul>
+  </section>
 
   <script>
-    const modeTitles = {
-      "3block": "3줄 블럭",
-      "4block": "4줄 블럭"
-    };
-
-    const transformLabel = {
-      "orig": "원본",
-      "flip_start": "시작점 반전",
-      "flip_odd_even": "홀짝 반전",
-      "flip_full": "완전 대칭"
-    };
-
-    function formatStat(counter) {
-      return Object.entries(counter)
-        .sort((a, b) => b[1] - a[1])
-        .map(([k, v]) => `${k}(${v})`)
-        .join(", ");
-    }
-
-    function renderSummary(containerId, stats, blockLabel) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-      container.innerHTML = "";
-
-      const titleTop = document.createElement("h2");
-      titleTop.textContent = `📊 ${blockLabel} 상단 요약`;
-      container.appendChild(titleTop);
-
-      const topTable = document.createElement("table");
-      topTable.className = "summary-box";
-      topTable.innerHTML = `
-        <thead><tr><th>변형</th><th>상단값(횟수)</th></tr></thead>
-        <tbody>
-          ${Object.entries(stats).map(([group, stat]) =>
-            `<tr><td>${transformLabel[group]}</td><td>${formatStat(stat.top)}</td></tr>`
-          ).join("")}
-        </tbody>
-      `;
-      container.appendChild(topTable);
-
-      const titleBottom = document.createElement("h2");
-      titleBottom.textContent = `📊 ${blockLabel} 하단 요약`;
-      container.appendChild(titleBottom);
-
-      const bottomTable = document.createElement("table");
-      bottomTable.className = "summary-box";
-      bottomTable.innerHTML = `
-        <thead><tr><th>변형</th><th>하단값(횟수)</th></tr></thead>
-        <tbody>
-          ${Object.entries(stats).map(([group, stat]) =>
-            `<tr><td>${transformLabel[group]}</td><td>${formatStat(stat.bottom)}</td></tr>`
-          ).join("")}
-        </tbody>
-      `;
-      container.appendChild(bottomTable);
-    }
-
-    async function loadSummary() {
+    async function loadCombinedPrediction() {
       try {
-        const res = await fetch("/predict_top3_summary");
-        const data = await res.json();
+        const res1 = await fetch("/predict?mode=3block_orig");
+        const data1 = await res1.json();
 
-        renderSummary("summary-3", {
-          orig: { top: data["3줄 블럭 Top3 요약"].Top3상단, bottom: data["3줄 블럭 Top3 요약"].Top3하단 },
-          flip_full: { top: [], bottom: [] },
-          flip_start: { top: [], bottom: [] },
-          flip_odd_even: { top: [], bottom: [] },
-        }, "3줄 블럭");
+        document.getElementById("round-num").textContent = data1["예측회차"];
+        document.getElementById("recent-block").textContent = data1["상단값들"]?.[0]?.["블럭"] || "-";
 
-        renderSummary("summary-4", {
-          orig: { top: data["4줄 블럭 Top3 요약"].Top3상단, bottom: data["4줄 블럭 Top3 요약"].Top3하단 },
-          flip_full: { top: [], bottom: [] },
-          flip_start: { top: [], bottom: [] },
-          flip_odd_even: { top: [], bottom: [] },
-        }, "4줄 블럭");
+        const topList = document.getElementById("top-predictions");
+        const bottomList = document.getElementById("bottom-predictions");
+
+        data1["상단값들"].slice(0, 3).forEach(v => {
+          const li = document.createElement("li");
+          li.textContent = `${v["값"]} (순번: ${v["순번"]})`;
+          topList.appendChild(li);
+        });
+
+        data1["하단값들"].slice(0, 3).forEach(v => {
+          const li = document.createElement("li");
+          li.textContent = `${v["값"]} (순번: ${v["순번"]})`;
+          bottomList.appendChild(li);
+        });
+
+        const res2 = await fetch("/predict_forward?size=3");
+        const data2 = await res2.json();
+
+        document.getElementById("forward-block").textContent = data2["기준블럭"] || "-";
+        const forwardList = document.getElementById("forward-top3");
+        (data2["Top3후속값"] || []).forEach(val => {
+          const li = document.createElement("li");
+          li.textContent = `${val} (출현: ${data2["빈도"][val] || 0}회)`;
+          forwardList.appendChild(li);
+        });
+
+        const res3 = await fetch("/predict_global_top");
+        const data3 = await res3.json();
+
+        const globalList = document.getElementById("global-top3");
+        (data3["Top3"] || []).forEach(val => {
+          const li = document.createElement("li");
+          li.textContent = `${val} (출현: ${data3["빈도"][val] || 0}회)`;
+          globalList.appendChild(li);
+        });
+
       } catch (e) {
-        console.error("요약 불러오기 실패", e);
+        console.error("예측 로딩 실패", e);
       }
     }
 
-    loadSummary();
+    loadCombinedPrediction();
   </script>
 </body>
 </html>
