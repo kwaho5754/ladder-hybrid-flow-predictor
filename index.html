@@ -5,7 +5,8 @@
   <title>사다리 블럭 예측 결과</title>
   <style>
     body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
-    h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
+    h1 { font-size: 1.8rem; text-align: center; margin-bottom: 0.5rem; }
+    #round-info { text-align: center; font-weight: bold; margin-bottom: 2rem; font-size: 1.2rem; }
     .box {
       background: #fff; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
       max-width: 600px; margin: 2rem auto; padding: 1.5rem;
@@ -17,6 +18,7 @@
 </head>
 <body>
   <h1>🔮 사다리 블럭 예측 결과</h1>
+  <p id="round-info">예측 회차: 불러오는 중...</p>
 
   <section class="box">
     <h2>📊 블럭 길이별 상단값 예측 (Top1)</h2>
@@ -31,10 +33,14 @@
         const res = await fetch("/predict_top_by_blocksize");
         const data = await res.json();
 
+        // 예측 회차 표시
+        document.getElementById("round-info").textContent = "예측 회차: " + data["예측회차"];
+
         const list = document.getElementById("prediction-list");
         list.innerHTML = "";
 
         for (const [label, info] of Object.entries(data)) {
+          if (label === "예측회차") continue;
           const li = document.createElement("li");
           li.textContent = `${label} → 예측값: ${info["예측값"]} (${info["출현"]}회)`;
           list.appendChild(li);
