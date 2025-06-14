@@ -3,7 +3,7 @@ from flask_cors import CORS
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
-from collections import Counter
+from collections import Counter, defaultdict
 
 load_dotenv()
 
@@ -45,15 +45,21 @@ def predict_top_by_blocksize():
                 result[f"{size}줄 블럭"] = {"예측값": "❌ 데이터 부족", "출현": 0}
                 continue
 
-            counter = Counter()
+            block_to_tops = defaultdict(Counter)
 
             # 슬라이딩: 블럭은 all_data[i : i+size], 상단값은 all_data[i - 1]
             for i in range(1, len(all_data) - size + 1):
                 block = tuple(all_data[i : i + size])
                 prev_value = all_data[i - 1]  # 블럭의 상단에 있었던 값
-                counter[prev_value] += 1
+                block_to_tops[block][prev_value] += 1
 
-            top = counter.most_common(1)
+            # 모든 블럭의 상단값 중 가장 많이 나온 값만 합산
+            overall_counter = Counter()
+            for tops in block_to_tops.values():
+                top_value, count = tops.most_common(1)[0]
+                overall_counter[top_value] += count
+
+            top = overall_counter.most_common(1)
             if top:
                 result[f"{size}줄 블럭"] = {"예측값": top[0][0], "출현": top[0][1]}
             else:
