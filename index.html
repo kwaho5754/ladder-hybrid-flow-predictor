@@ -1,43 +1,50 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>분석기 기반 사다리 예측</title>
+  <meta charset="UTF-8">
+  <title>분석기 기반 예측 결과</title>
   <style>
-    body { font-family: sans-serif; background: #111; color: #fff; padding: 2rem; }
-    h1 { color: #00f0ff; }
-    .section { margin-bottom: 2rem; }
-    .predict-box { border: 1px solid #333; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; background: #222; }
-    .predict-box h2 { margin-top: 0; color: #ffaa00; }
-    .prediction { font-size: 1.2rem; margin: 0.5rem 0; }
+    body { font-family: sans-serif; background: #111; color: #eee; padding: 20px; }
+    h2 { color: #4fc3f7; border-bottom: 1px solid #4fc3f7; padding-bottom: 5px; }
+    .block { margin-bottom: 30px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #444; padding: 8px; text-align: center; }
+    th { background-color: #222; }
+    td { background-color: #1c1c1c; }
   </style>
 </head>
 <body>
-  <h1>🔍 분석기 기반 사다리 예측 결과</h1>
-  <div id="result">결과 불러오는 중...</div>
+  <h1>🎯 분석기 기반 예측 Top3</h1>
+  <div id="results"></div>
 
   <script>
     fetch("/predict_analysis")
       .then(res => res.json())
       .then(data => {
-        const resultDiv = document.getElementById("result");
-        let html = `<div class='section'><strong>예측 회차:</strong> ${data['예측회차']}</div>`;
+        const results = document.getElementById("results");
+        for (const [label, predictions] of Object.entries(data)) {
+          const block = document.createElement("div");
+          block.className = "block";
+          const title = document.createElement("h2");
+          title.innerText = `🔹 ${label}`;
+          block.appendChild(title);
 
-        const addSection = (title, list) => {
-          html += `<div class='section predict-box'><h2>${title}</h2>`;
-          list.forEach((item, idx) => {
-            html += `<div class='prediction'>TOP${idx + 1}: ${item['예측값']} (점수: ${item['점수']})</div>`;
-          });
-          html += `</div>`;
-        };
+          const table = document.createElement("table");
+          const thead = document.createElement("thead");
+          thead.innerHTML = "<tr><th>예측값</th><th>신뢰도</th></tr>";
+          table.appendChild(thead);
 
-        addSection("신선도 기반 예측", data["신선도 기반 예측"]);
-        addSection("다양도 기반 예측", data["다양도 기반 예측"]);
+          const tbody = document.createElement("tbody");
+          for (const item of predictions) {
+            const row = document.createElement("tr");
+            row.innerHTML = `<td>${item["예측값"]}</td><td>${item["점수"]}</td>`;
+            tbody.appendChild(row);
+          }
+          table.appendChild(tbody);
+          block.appendChild(table);
 
-        resultDiv.innerHTML = html;
-      })
-      .catch(err => {
-        document.getElementById("result").innerText = "에러 발생: " + err;
+          results.appendChild(block);
+        }
       });
   </script>
 </body>

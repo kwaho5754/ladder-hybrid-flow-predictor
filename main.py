@@ -1,89 +1,83 @@
-from flask import Flask, jsonify, send_from_directory
-from flask_cors import CORS
-from supabase import create_client, Client
-from dotenv import load_dotenv
+# ✅ main.py - 3가지 예측 방식 기반 API
+from flask import Flask, jsonify
+from collections import defaultdict, Counter
+import random
+import supabase
 import os
-from collections import Counter, defaultdict
 import math
 
-load_dotenv()
-
 app = Flask(__name__)
-CORS(app)
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
+# Supabase 클라이언트 초기화
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supa = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-def convert(entry):
-    side = '좌' if entry['start_point'] == 'LEFT' else '우'
-    count = str(entry['line_count'])
-    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
-    return f"{side}{count}{oe}"
-
-@app.route("/")
-def home():
-    return send_from_directory(os.path.dirname(__file__), "index.html")
+BLOCK_SIZE = 3
+LIMIT = 7000
 
 @app.route("/predict_analysis")
 def predict_analysis():
-    try:
-        response = supabase.table(SUPABASE_TABLE).select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(7000) \
-            .execute()
+    # 1. 데이터 로딩
+    result = supa.table("raw_ladder").select("value").order("id", desc=True).limit(LIMIT).execute()
+    all_values = [item['value'] for item in reversed(result.data)]
 
-        raw = response.data
-        all_data = [convert(d) for d in raw]
-        round_num = int(raw[0]["date_round"]) + 1 if raw else "❓"
+    predictions = {
+        "강화학습 기반": predict_reinforcement(all_values),
+        "상대 비교 기반": predict_relative(all_values),
+        "부트스트랩 기반": predict_bootstrap(all_values)
+    }
 
-        results = {"예측회차": round_num}
-        size = 3  # 3줄 블럭으로 고정
+    return jsonify(predictions)
 
-        block_to_tops = defaultdict(list)
-        for i in range(1, len(all_data) - size + 1):
-            block = tuple(all_data[i:i + size])
-            top = all_data[i - 1]
-            block_to_tops[block].append((i, top))  # (등장위치, 상단값)
+# 1️⃣ 강화학습 기반
+reward_table = defaultdict(lambda: defaultdict(int))
+def predict_reinforcement(data):
+    history = defaultdict(list)
+    for i in range(1, len(data) - BLOCK_SIZE):
+        block = tuple(data[i:i + BLOCK_SIZE])
+        top = data[i - 1]
+        reward_table[block][top] += 1
+        history[block].append(top)
 
-        freshness_score = Counter()
-        diversity_score = Counter()
+    recent = tuple(data[-BLOCK_SIZE:])
+    scores = reward_table.get(recent, {})
+    ranked = Counter(scores).most_common(3)
+    return format_result(ranked)
 
-        for block, matches in block_to_tops.items():
-            total = len(matches)
-            tops = [t for _, t in matches]
-            dist = Counter(tops)
-            most_common = dist.most_common(1)[0][0]
+# 2️⃣ 상대 비교 기반
+def predict_relative(data):
+    comparison_table = defaultdict(Counter)
+    for i in range(1, len(data) - BLOCK_SIZE):
+        block = tuple(data[i:i + BLOCK_SIZE])
+        top = data[i - 1]
+        comparison_table[block][top] += 1
 
-            # 신선도 점수 = 최신 등장 위치가 높을수록 점수 높음 (위치 역순 → 0이 최신)
-            last_index = matches[-1][0]  # 가장 마지막 등장 위치
-            freshness = 1 - (last_index / len(all_data))  # 0~1 사이 값
-            freshness_score[most_common] += freshness
+    recent = tuple(data[-BLOCK_SIZE:])
+    counter = comparison_table.get(recent, Counter())
+    candidates = list(counter.items())
+    ranked = sorted(candidates, key=lambda x: (-x[1], random.random()))[:3]
+    return format_result(ranked)
 
-            # 다양도 점수 = 엔트로피 기반 (1 - normalized entropy)
-            probs = [c / total for c in dist.values()]
-            entropy = -sum(p * math.log2(p) for p in probs if p > 0)
-            max_entropy = math.log2(len(dist)) if len(dist) > 1 else 1
-            diversity = 1 - (entropy / max_entropy if max_entropy > 0 else 0)
-            diversity_score[most_common] += diversity
+# 3️⃣ 부트스트랩 기반
+def predict_bootstrap(data, samples=100):
+    result_counter = Counter()
+    for _ in range(samples):
+        offset = random.randint(1, len(data) - BLOCK_SIZE - 1)
+        block = tuple(data[offset:offset + BLOCK_SIZE])
+        top = data[offset - 1]
+        if block == tuple(data[-BLOCK_SIZE:]):
+            result_counter[top] += 1
+    ranked = result_counter.most_common(3)
+    return format_result(ranked)
 
-        results["신선도 기반 예측"] = [
-            {"예측값": v, "점수": round(s, 4)}
-            for v, s in freshness_score.most_common(3)
-        ]
-        results["다양도 기반 예측"] = [
-            {"예측값": v, "점수": round(s, 4)}
-            for v, s in diversity_score.most_common(3)
-        ]
+# 출력 포맷 통일
+def format_result(pairs):
+    total = sum([v for _, v in pairs]) or 1
+    return [
+        {"예측값": key, "점수": round(value / total, 3)}
+        for key, value in pairs
+    ]
 
-        return jsonify(results)
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT") or 5000)
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
