@@ -37,8 +37,9 @@ def predict_top_by_blocksize():
 
         raw = response.data
         all_data = [convert(d) for d in raw]  # 최신 → 과거 방향 유지
+        round_num = int(raw[0]["date_round"]) + 1 if raw else "❓"
 
-        result = {}
+        result = {"예측회차": round_num}
 
         for size in [3, 4, 5]:
             if len(all_data) <= size:
@@ -53,11 +54,10 @@ def predict_top_by_blocksize():
                 prev_value = all_data[i - 1]  # 블럭의 상단에 있었던 값
                 block_to_tops[block][prev_value] += 1
 
-            # 모든 블럭의 상단값 중 가장 많이 나온 값만 합산
+            # 모든 상단값을 누적해서 합산
             overall_counter = Counter()
             for tops in block_to_tops.values():
-                top_value, count = tops.most_common(1)[0]
-                overall_counter[top_value] += count
+                overall_counter.update(tops)
 
             top = overall_counter.most_common(1)
             if top:
