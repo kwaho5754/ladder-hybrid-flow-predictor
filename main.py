@@ -22,141 +22,43 @@ def convert(entry):
     oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
     return f"{side}{count}{oe}"
 
-def parse_block(s):
-    return s[0], s[1:-1], s[-1]
-
-def flip_full(block):
-    return [('우' if s == '좌' else '좌') + c + ('짝' if o == '홀' else '홀') for s, c, o in map(parse_block, block)]
-
-def flip_start(block):
-    return [s + ('4' if c == '3' else '3') + ('홀' if o == '짝' else '짝') for s, c, o in map(parse_block, block)]
-
-def flip_odd_even(block):
-    return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
-
-def find_all_matches(block, full_data, existing_matches_indices=None):
-    top_matches = []
-    bottom_matches = []
-    block_len = len(block)
-
-    for i in reversed(range(len(full_data) - block_len + 1)):
-        is_overlapping = False
-        if existing_matches_indices:
-            for existing_start, existing_len in existing_matches_indices:
-                if max(i, existing_start) < min(i + block_len, existing_start + existing_len):
-                    is_overlapping = True
-                    break
-        if is_overlapping:
-            continue
-
-        candidate = full_data[i:i + block_len]
-        if candidate == block:
-            top_index = i - 1
-            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            top_matches.append({"값": top_pred, "블럭": ">".join(block), "순번": i + 1})
-
-            bottom_index = i + block_len
-            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-            bottom_matches.append({"값": bottom_pred, "블럭": ">".join(block), "순번": i + 1})
-
-    if not top_matches:
-        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-    if not bottom_matches:
-        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-
-    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else float('inf'))[:4]
-    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else float('inf'))[:4]
-
-    return top_matches, bottom_matches
-
 @app.route("/")
 def home():
     return send_from_directory(os.path.dirname(__file__), "index.html")
 
-@app.route("/predict")
-def predict():
+@app.route("/predict_top_by_blocksize")
+def predict_top_by_blocksize():
     try:
-        mode = request.args.get("mode", "3block_orig")
-        size_str = mode[0]
-        if size_str not in ['3', '4']:
-            return jsonify({"error": "지원하지 않는 블럭 크기입니다. 3 또는 4만 가능합니다."}), 400
-        size = int(size_str)
+        response = supabase.table(SUPABASE_TABLE).select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(6000) \
+            .execute()
 
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
         raw = response.data
-        round_num = int(raw[0]["date_round"]) + 1
-        all_data = [convert(d) for d in raw]
-        recent_flow = all_data[:size]
+        all_data = [convert(d) for d in raw]  # 최신 → 과거 방향 유지
 
-        if "flip_full" in mode:
-            flow = flip_full(recent_flow)
-        elif "flip_start" in mode:
-            flow = flip_start(recent_flow)
-        elif "flip_odd_even" in mode:
-            flow = flip_odd_even(recent_flow)
-        else:
-            flow = recent_flow
+        result = {}
 
-        if size == 3:
-            four_block_matched_indices = []
-            four_block_recent_flow = all_data[:4]
-            for fn in [lambda x: x, flip_full, flip_start, flip_odd_even]:
-                transformed_four_block = fn(four_block_recent_flow)
-                for i in range(len(all_data) - len(transformed_four_block) + 1):
-                    if all_data[i:i + len(transformed_four_block)] == transformed_four_block:
-                        four_block_matched_indices.append((i, len(transformed_four_block)))
+        for size in [3, 4, 5]:
+            if len(all_data) <= size:
+                result[f"{size}줄 블럭"] = {"예측값": "❌ 데이터 부족", "출현": 0}
+                continue
 
-            top, bottom = find_all_matches(flow, all_data, existing_matches_indices=four_block_matched_indices)
-        else:
-            top, bottom = find_all_matches(flow, all_data)
+            counter = Counter()
 
-        return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
+            for i in range(size, len(all_data)):
+                block = tuple(all_data[i:i+size])
+                prev_value = all_data[i - 1]  # 상단값 (이전값)
+                counter[prev_value] += 1
 
-    except Exception as e:
-        return jsonify({"error": str(e)})
+            top = counter.most_common(1)
+            if top:
+                result[f"{size}줄 블럭"] = {"예측값": top[0][0], "출현": top[0][1]}
+            else:
+                result[f"{size}줄 블럭"] = {"예측값": "❌ 없음", "출현": 0}
 
-@app.route("/predict_forward")
-def predict_forward():
-    try:
-        block_size = int(request.args.get("size", 3))
-
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=False).order("date_round", desc=False).limit(3000).execute()
-        raw = response.data
-        all_data = [convert(d) for d in raw]
-
-        block = tuple(all_data[-block_size:])
-        next_counter = Counter()
-
-        for i in range(len(all_data) - block_size):
-            candidate = tuple(all_data[i:i+block_size])
-            if candidate == block and i + block_size < len(all_data):
-                next_val = all_data[i + block_size]
-                next_counter[next_val] += 1
-
-        top3 = next_counter.most_common(3)
-        return jsonify({
-            "기준블럭": ">".join(block),
-            "Top3후속값": [v[0] for v in top3],
-            "빈도": dict(top3)
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/predict_global_top")
-def predict_global_top():
-    try:
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(7000).execute()
-        raw = response.data
-        all_data = [convert(d) for d in raw]
-
-        counter = Counter(all_data)
-        top3 = counter.most_common(3)
-
-        return jsonify({
-            "Top3": [v[0] for v in top3],
-            "빈도": dict(top3)
-        })
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": str(e)})

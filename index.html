@@ -8,91 +8,45 @@
     h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
     .box {
       background: #fff; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      max-width: 800px; margin: 2rem auto; padding: 1.5rem;
+      max-width: 600px; margin: 2rem auto; padding: 1.5rem;
     }
-    h2 { font-size: 1.4rem; margin-bottom: 1rem; color: #333; }
-    ul, ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-    li { margin-bottom: 0.5rem; }
-    p { margin: 0.4rem 0; }
-    .highlight { font-weight: bold; color: #003366; }
+    h2 { font-size: 1.4rem; margin-bottom: 1rem; color: #333; text-align: center; }
+    ul { list-style: none; padding: 0; }
+    li { margin-bottom: 0.5rem; font-size: 1rem; text-align: center; }
   </style>
 </head>
 <body>
   <h1>🔮 사다리 블럭 예측 결과</h1>
 
   <section class="box">
-    <h2>📂 현재 구조 기반 예측</h2>
-    <p>예측 회차: <span id="round-num"></span></p>
-    <p>기준 블럭: <span id="recent-block"></span></p>
-    <p>🔺 상단 예측 Top3</p>
-    <ul id="top-predictions"></ul>
-    <p>🔻 하단 예측 Top3</p>
-    <ul id="bottom-predictions"></ul>
-  </section>
-
-  <section class="box">
-    <h2>⏩ 미래 흐름 기반 예측</h2>
-    <p>기준 블럭: <span id="forward-block"></span></p>
-    <p>📈 이후 자주 나온 Top3 값:</p>
-    <ol id="forward-top3"></ol>
-  </section>
-
-  <section class="box">
-    <h2>📊 전체 빈도 기반 상단 예측</h2>
-    <ul id="global-top3"></ul>
+    <h2>📊 블럭 길이별 상단값 예측 (Top1)</h2>
+    <ul id="prediction-list">
+      <li>불러오는 중...</li>
+    </ul>
   </section>
 
   <script>
-    async function loadCombinedPrediction() {
+    async function loadBlockPrediction() {
       try {
-        const res1 = await fetch("/predict?mode=3block_orig");
-        const data1 = await res1.json();
+        const res = await fetch("/predict_top_by_blocksize");
+        const data = await res.json();
 
-        document.getElementById("round-num").textContent = data1["예측회차"];
-        document.getElementById("recent-block").textContent = data1["상단값들"]?.[0]?.["블럭"] || "-";
+        const list = document.getElementById("prediction-list");
+        list.innerHTML = "";
 
-        const topList = document.getElementById("top-predictions");
-        const bottomList = document.getElementById("bottom-predictions");
-
-        data1["상단값들"].slice(0, 3).forEach(v => {
+        for (const [label, info] of Object.entries(data)) {
           const li = document.createElement("li");
-          li.textContent = `${v["값"]} (순번: ${v["순번"]})`;
-          topList.appendChild(li);
-        });
-
-        data1["하단값들"].slice(0, 3).forEach(v => {
-          const li = document.createElement("li");
-          li.textContent = `${v["값"]} (순번: ${v["순번"]})`;
-          bottomList.appendChild(li);
-        });
-
-        const res2 = await fetch("/predict_forward?size=3");
-        const data2 = await res2.json();
-
-        document.getElementById("forward-block").textContent = data2["기준블럭"] || "-";
-        const forwardList = document.getElementById("forward-top3");
-        (data2["Top3후속값"] || []).forEach(val => {
-          const li = document.createElement("li");
-          li.textContent = `${val} (출현: ${data2["빈도"][val] || 0}회)`;
-          forwardList.appendChild(li);
-        });
-
-        const res3 = await fetch("/predict_global_top");
-        const data3 = await res3.json();
-
-        const globalList = document.getElementById("global-top3");
-        (data3["Top3"] || []).forEach(val => {
-          const li = document.createElement("li");
-          li.textContent = `${val} (출현: ${data3["빈도"][val] || 0}회)`;
-          globalList.appendChild(li);
-        });
-
+          li.textContent = `${label} → 예측값: ${info["예측값"]} (${info["출현"]}회)`;
+          list.appendChild(li);
+        }
       } catch (e) {
-        console.error("예측 로딩 실패", e);
+        const list = document.getElementById("prediction-list");
+        list.innerHTML = "<li>❌ 예측 로딩 실패</li>";
+        console.error(e);
       }
     }
 
-    loadCombinedPrediction();
+    loadBlockPrediction();
   </script>
 </body>
 </html>
