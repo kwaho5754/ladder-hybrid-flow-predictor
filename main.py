@@ -32,7 +32,7 @@ def predict_top_by_blocksize():
         response = supabase.table(SUPABASE_TABLE).select("*") \
             .order("reg_date", desc=True) \
             .order("date_round", desc=True) \
-            .limit(3000) \
+            .limit(7000) \
             .execute()
 
         raw = response.data
@@ -46,20 +46,21 @@ def predict_top_by_blocksize():
                 result[f"{size}줄 블럭"] = {"예측값": "❌ 데이터 부족", "출현": 0}
                 continue
 
-            block_to_tops = defaultdict(Counter)
+            block_to_top = defaultdict(Counter)
 
-            # 슬라이딩: 블럭은 all_data[i : i+size], 상단값은 all_data[i - 1]
+            # 슬라이딩 블럭: block → 상단값 매핑 저장
             for i in range(1, len(all_data) - size + 1):
                 block = tuple(all_data[i : i + size])
-                prev_value = all_data[i - 1]  # 블럭의 상단에 있었던 값
-                block_to_tops[block][prev_value] += 1
+                top_value = all_data[i - 1]  # 블럭보다 앞에 있었던 상단값
+                block_to_top[block][top_value] += 1
 
-            # 모든 상단값을 누적해서 합산
-            overall_counter = Counter()
-            for tops in block_to_tops.values():
-                overall_counter.update(tops)
+            # 블럭별 예측값: 각 블럭이 가장 자주 예측한 상단값을 모아 통계 집계
+            prediction_counter = Counter()
+            for block, tops in block_to_top.items():
+                most_common_top = tops.most_common(1)[0]  # top1
+                prediction_counter[most_common_top[0]] += 1
 
-            top = overall_counter.most_common(1)
+            top = prediction_counter.most_common(1)
             if top:
                 result[f"{size}줄 블럭"] = {"예측값": top[0][0], "출현": top[0][1]}
             else:
