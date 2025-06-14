@@ -32,7 +32,7 @@ def predict_top_by_blocksize():
         response = supabase.table(SUPABASE_TABLE).select("*") \
             .order("reg_date", desc=True) \
             .order("date_round", desc=True) \
-            .limit(6000) \
+            .limit(3000) \
             .execute()
 
         raw = response.data
@@ -47,9 +47,10 @@ def predict_top_by_blocksize():
 
             counter = Counter()
 
-            for i in range(size, len(all_data)):
-                block = tuple(all_data[i:i+size])
-                prev_value = all_data[i - 1]  # 상단값 (이전값)
+            # 슬라이딩: 블럭은 all_data[i : i+size], 상단값은 all_data[i - 1]
+            for i in range(1, len(all_data) - size + 1):
+                block = tuple(all_data[i : i + size])
+                prev_value = all_data[i - 1]  # 블럭의 상단에 있었던 값
                 counter[prev_value] += 1
 
             top = counter.most_common(1)
