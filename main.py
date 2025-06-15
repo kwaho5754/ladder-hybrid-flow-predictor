@@ -1,5 +1,5 @@
 # ✅ main.py - 3가지 예측 방식 기반 API
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from collections import defaultdict, Counter
 import random
 import supabase
@@ -15,6 +15,10 @@ supa = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 
 BLOCK_SIZE = 3
 LIMIT = 7000
+
+@app.route("/")
+def home():
+    return send_from_directory(os.path.dirname(__file__), "index.html")
 
 @app.route("/predict_analysis")
 def predict_analysis():
