@@ -36,7 +36,7 @@ def predict_split():
         round_num = int(raw[0]["date_round"]) + 1
 
         all_data = [convert(d) for d in raw]
-        recent = all_data[:5]  # 최근 5개 사용
+        recent = all_data[:20]  
 
         pred = Counter(recent).most_common(1)[0][0] if recent else "❌"
 
@@ -58,9 +58,9 @@ def predict_split():
             return round(Counter(seq)[value] / len(seq) * 100) if value in seq else 0
 
         # 요소별 시퀀스 생성
-        start_seq = [x[0] for x in all_data if len(x) == 3][:20]
-        shape_seq = [x[1] for x in all_data if len(x) == 3][:20]
-        oe_seq = [x[2] for x in all_data if len(x) == 3][:20]
+        start_seq = [x[0] for x in all_data if len(x) == 3][:30]
+        shape_seq = [x[1] for x in all_data if len(x) == 3][:30]
+        oe_seq = [x[2] for x in all_data if len(x) == 3][:30]
 
         요소점수 = {
             "시작점": get_score(start_seq, 요소별["시작점"]),
