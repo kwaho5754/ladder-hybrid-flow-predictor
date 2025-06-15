@@ -5,24 +5,32 @@
   <title>분석기 기반 예측 결과</title>
   <style>
     body { font-family: sans-serif; background: #111; color: #eee; padding: 20px; }
+    h1 { color: #ff4081; }
     h2 { color: #4fc3f7; border-bottom: 1px solid #4fc3f7; padding-bottom: 5px; }
     .block { margin-bottom: 30px; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #444; padding: 8px; text-align: center; }
     th { background-color: #222; }
     td { background-color: #1c1c1c; }
+    .round-info { text-align: center; font-size: 1.3rem; margin-bottom: 20px; color: #80d8ff; }
   </style>
 </head>
 <body>
   <h1>🎯 분석기 기반 예측 Top3</h1>
+  <div class="round-info" id="round-display">예측 회차: ...</div>
   <div id="results"></div>
 
   <script>
     fetch("/predict_analysis")
       .then(res => res.json())
       .then(data => {
+        const round = data["예측회차"] || "?";
+        document.getElementById("round-display").textContent = `예측 회차: ${round}`;
+
         const results = document.getElementById("results");
         for (const [label, predictions] of Object.entries(data)) {
+          if (label === "예측회차") continue;
+
           const block = document.createElement("div");
           block.className = "block";
           const title = document.createElement("h2");
