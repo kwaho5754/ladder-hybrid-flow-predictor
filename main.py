@@ -1,93 +1,107 @@
-# ✅ main.py - Supabase 연동 + 3가지 분석기 기반 예측 시스템 + 예측회차 포함
-from flask import Flask, jsonify, send_from_directory
-from collections import defaultdict, Counter
-import random
-import supabase
+### main.py 전체 수정 버전 (reverse_block 추가)
+
 import os
+import json
+from flask import Flask, jsonify
+from collections import defaultdict
+from supabase import create_client, Client
 
 app = Flask(__name__)
 
-# Supabase 클라이언트 초기화
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-SUPABASE_TABLE = os.getenv("SUPABASE_TABLE", "ladder")
-supa = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
+# Supabase 설정
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-BLOCK_SIZE = 3
-LIMIT = 7000
+# 블럭 변형 함수들
+def flip_full(block):
+    return [flip(b) for b in block[::-1]]
 
-# 🔁 좌우/홀짝 블럭 문자열 변환
-def convert(entry):
-    side = '좌' if entry['start_point'] == 'LEFT' else '우'
-    count = str(entry['line_count'])
-    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
-    return f"{side}{count}{oe}"
+def flip_start(block):
+    return [flip_side(b) if i == 0 else b for i, b in enumerate(block)]
 
-@app.route("/")
-def home():
-    return send_from_directory(os.path.dirname(__file__), "index.html")
+def flip_odd_even(block):
+    return [flip_odd_even_single(b) for b in block]
 
-@app.route("/predict_analysis")
-def predict_analysis():
-    # 1. Supabase에서 데이터 로딩
-    result = supa.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(LIMIT).execute()
-    all_data = [convert(row) for row in reversed(result.data)]
-    round_num = int(result.data[0]["date_round"]) + 1 if result.data else "?"
+def reverse_block(block):
+    return block[::-1]
 
-    predictions = {
-        "예측회차": round_num,
-        "강화학습 기반": predict_reinforcement(all_data),
-        "상대 비교 기반": predict_relative(all_data),
-        "부트스트랩 기반": predict_bootstrap(all_data)
+def flip(b):
+    return b.replace("좌", "tmp").replace("우", "좌").replace("tmp", "우")\
+            .replace("홀", "tmp").replace("짝", "홀").replace("tmp", "짝")
+
+def flip_side(b):
+    return b.replace("좌", "tmp").replace("우", "좌").replace("tmp", "우")
+
+def flip_odd_even_single(b):
+    return b.replace("홀", "tmp").replace("짝", "홀").replace("tmp", "짝")
+
+# 블럭 생성 함수
+def make_blocks(data, size):
+    return [data[i:i+size] for i in range(len(data)-size)]
+
+# 예측 데이터 생성
+def predict_from_blocks(blocks):
+    result = defaultdict(list)
+    for i in range(len(blocks)-1):
+        key = tuple(blocks[i])
+        result[key].append(blocks[i+1])
+    return result
+
+@app.route("/predict")
+def predict():
+    response = supabase.table("raw_result").select("*").order("date_round", desc=True).limit(7000).execute()
+    data = [item['result'] for item in response.data if 'result' in item]
+
+    results = {}
+    directions = {
+        "orig": lambda x: x,
+        "flip_full": flip_full,
+        "flip_start": flip_start,
+        "flip_odd_even": flip_odd_even,
+        "reverse_block": reverse_block
     }
-    return jsonify(predictions)
 
-# 1️⃣ 강화학습 기반 분석기
-reward_table = defaultdict(lambda: defaultdict(int))
-def predict_reinforcement(data):
-    for i in range(1, len(data) - BLOCK_SIZE):
-        block = tuple(data[i:i + BLOCK_SIZE])
-        top = data[i - 1]
-        reward_table[block][top] += 1
+    for dir_key, transform in directions.items():
+        results[dir_key] = {}
+        for block_size in range(3, 7):
+            blocks = make_blocks(data, block_size)
+            transformed = [transform(b) for b in blocks]
+            predictions = predict_from_blocks(transformed)
+            results[dir_key][f"{block_size}block"] = predictions
 
-    recent = tuple(data[-BLOCK_SIZE:])
-    scores = reward_table.get(recent, {})
-    ranked = Counter(scores).most_common(3)
-    return format_result(ranked)
+    return jsonify(results)
 
-# 2️⃣ 상대 비교 기반 분석기
-def predict_relative(data):
-    comparison_table = defaultdict(Counter)
-    for i in range(1, len(data) - BLOCK_SIZE):
-        block = tuple(data[i:i + BLOCK_SIZE])
-        top = data[i - 1]
-        comparison_table[block][top] += 1
+@app.route("/predict_top3_summary")
+def predict_top3_summary():
+    response = supabase.table("raw_result").select("*").order("date_round", desc=True).limit(7000).execute()
+    data = [item['result'] for item in response.data if 'result' in item]
+    latest_round = response.data[0]["date_round"] + 1 if response.data else 0
 
-    recent = tuple(data[-BLOCK_SIZE:])
-    counter = comparison_table.get(recent, Counter())
-    candidates = list(counter.items())
-    ranked = sorted(candidates, key=lambda x: (-x[1], random.random()))[:3]
-    return format_result(ranked)
+    summary = {}
+    directions = {
+        "orig": lambda x: x,
+        "flip_full": flip_full,
+        "flip_start": flip_start,
+        "flip_odd_even": flip_odd_even,
+        "reverse_block": reverse_block
+    }
 
-# 3️⃣ 부트스트랩 기반 분석기
-def predict_bootstrap(data, samples=100):
-    result_counter = Counter()
-    for _ in range(samples):
-        offset = random.randint(1, len(data) - BLOCK_SIZE - 1)
-        block = tuple(data[offset:offset + BLOCK_SIZE])
-        top = data[offset - 1]
-        if block == tuple(data[-BLOCK_SIZE:]):
-            result_counter[top] += 1
-    ranked = result_counter.most_common(3)
-    return format_result(ranked)
+    for dir_key, transform in directions.items():
+        summary[dir_key] = {}
+        for block_size in [3, 4]:
+            blocks = make_blocks(data, block_size)
+            transformed = [transform(b) for b in blocks]
+            predictions = predict_from_blocks(transformed)
+            freq = defaultdict(int)
+            for pred_list in predictions.values():
+                for p in pred_list:
+                    freq[tuple(p)] += 1
+            top3 = sorted(freq.items(), key=lambda x: -x[1])[:3]
+            summary[dir_key][f"{block_size}block"] = [{"value": list(k), "count": v} for k, v in top3]
 
-# 출력 포맷 통일 함수
-def format_result(pairs):
-    total = sum([v for _, v in pairs]) or 1
-    return [
-        {"예측값": key, "점수": round(value / total, 3)}
-        for key, value in pairs
-    ]
+    return jsonify({"summary": summary, "round": latest_round})
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)
