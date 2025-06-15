@@ -1,88 +1,43 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>사다리 예측 시스템</title>
+  <meta charset="UTF-8">
+  <title>최종 예측 조합</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f0f0f0;
+      background: #111;
+      color: #eee;
+      font-family: 'Courier New', monospace;
+      padding: 2rem;
     }
-    h1 {
-      text-align: center;
+    h2 {
+      color: #9df;
     }
-    .section {
-      background: white;
-      padding: 15px;
-      margin-bottom: 20px;
+    pre {
+      background: #222;
+      padding: 1rem;
       border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.1);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: center;
-    }
-    th {
-      background-color: #f2f2f2;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
-  <h1>사다리 블럭 예측 결과</h1>
-
-  <div id="roundInfo" class="section"></div>
-
-  <div id="results"></div>
+  <h2>최종 조합 예측 시각화</h2>
+  <pre id="result">Loading...</pre>
 
   <script>
-    async function loadPredictions() {
-      const res = await fetch("/predict_top3_summary");
-      const data = await res.json();
-      const summary = data.summary;
-      const round = data.round;
+    fetch("/predict_split")
+      .then(res => res.json())
+      .then(data => {
+        const pred = data["가장많이나온값"];
+        const part = data["요소별예측"];
 
-      document.getElementById("roundInfo").innerHTML = `<h2>예측 회차: ${round}회차</h2>`;
-
-      const container = document.getElementById("results");
-      container.innerHTML = "";
-
-      for (const [direction, sizes] of Object.entries(summary)) {
-        const section = document.createElement("div");
-        section.className = "section";
-
-        const title = document.createElement("h2");
-        title.textContent = `방향: ${direction}`;
-        section.appendChild(title);
-
-        for (const [size, results] of Object.entries(sizes)) {
-          const table = document.createElement("table");
-          const thead = document.createElement("thead");
-          thead.innerHTML = `<tr><th>블럭 길이: ${size}</th><th>예측값</th><th>빈도</th></tr>`;
-          table.appendChild(thead);
-
-          const tbody = document.createElement("tbody");
-          for (const row of results) {
-            const tr = document.createElement("tr");
-            const val = row.value.join(", ");
-            tr.innerHTML = `<td></td><td>${val}</td><td>${row.count}</td>`;
-            tbody.appendChild(tr);
-          }
-          table.appendChild(tbody);
-          section.appendChild(table);
-        }
-
-        container.appendChild(section);
-      }
-    }
-
-    loadPredictions();
+        document.getElementById("result").textContent =
+          `🤖 최종 예측 조합: [ ${pred} ]\n\n` +
+          `- 시작점 : ${part["시작점"]}\n` +
+          `- 사다리 구조 : ${part["사다리"]}\n` +
+          `- 끝자리 : ${part["끝자리"]}`;
+      });
   </script>
 </body>
 </html>
