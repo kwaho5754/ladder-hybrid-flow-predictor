@@ -53,11 +53,27 @@ def predict_split():
                 "끝자리": "❌"
             }
 
+        # 점수 계산 함수
+        def get_score(seq, value):
+            return round(Counter(seq)[value] / len(seq) * 100) if value in seq else 0
+
+        # 요소별 시퀀스 생성
+        start_seq = [x[0] for x in all_data if len(x) == 3][:20]
+        shape_seq = [x[1] for x in all_data if len(x) == 3][:20]
+        oe_seq = [x[2] for x in all_data if len(x) == 3][:20]
+
+        요소점수 = {
+            "시작점": get_score(start_seq, 요소별["시작점"]),
+            "사다리": get_score(shape_seq, 요소별["사다리"]),
+            "끝자리": get_score(oe_seq, 요소별["끝자리"])
+        }
+
         return jsonify({
             "예측회차": round_num,
             "최근값들": recent,
             "가장많이나온값": pred,
             "요소별예측": 요소별,
+            "요소별점수": 요소점수,
             "전체개수": len(all_data)
         })
 

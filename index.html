@@ -26,17 +26,34 @@
   <pre id="result">Loading...</pre>
 
   <script>
+    function scoreToStars(score) {
+      const stars = Math.round(score / 20);
+      return '⭐'.repeat(stars) + '☆'.repeat(5 - stars) + ` (${score}%)`;
+    }
+
+    function scoreToEmoji(score) {
+      if (score >= 80) return '🔥 반복 중';
+      if (score >= 50) return '🌊 불안정';
+      return '🧊 거의 없음';
+    }
+
     fetch("/predict_split")
       .then(res => res.json())
       .then(data => {
-        const pred = data["가장많이나온값"];
-        const part = data["요소별예측"];
+        const round = data["예측회차"] || "❌";
+        const pred = data["가장많이나온값"] || "❌";
+        const part = data["요소별예측"] || { "시작점": "❌", "사다리": "❌", "끝자리": "❌" };
+        const score = data["요소별점수"] || { "시작점": 0, "사다리": 0, "끝자리": 0 };
 
         document.getElementById("result").textContent =
+          `📅 예측 회차: ${round}\n` +
           `🤖 최종 예측 조합: [ ${pred} ]\n\n` +
-          `- 시작점 : ${part["시작점"]}\n` +
-          `- 사다리 구조 : ${part["사다리"]}\n` +
-          `- 끝자리 : ${part["끝자리"]}`;
+          `- 시작점 : ${part["시작점"]} ${scoreToStars(score["시작점"])} | ${scoreToEmoji(score["시작점"])}\n` +
+          `- 사다리 구조 : ${part["사다리"]} ${scoreToStars(score["사다리"])} | ${scoreToEmoji(score["사다리"])}\n` +
+          `- 끝자리 : ${part["끝자리"]} ${scoreToStars(score["끝자리"])} | ${scoreToEmoji(score["끝자리"])}`;
+      })
+      .catch(err => {
+        document.getElementById("result").textContent = "❌ 예측 데이터를 불러오지 못했습니다.";
       });
   </script>
 </body>
