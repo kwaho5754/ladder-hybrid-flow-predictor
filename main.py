@@ -40,10 +40,24 @@ def predict_split():
 
         pred = Counter(recent).most_common(1)[0][0] if recent else "❌"
 
+        if len(pred) == 3:
+            요소별 = {
+                "시작점": pred[0],
+                "사다리": pred[1],
+                "끝자리": pred[2]
+            }
+        else:
+            요소별 = {
+                "시작점": "❌",
+                "사다리": "❌",
+                "끝자리": "❌"
+            }
+
         return jsonify({
             "예측회차": round_num,
             "최근값들": recent,
             "가장많이나온값": pred,
+            "요소별예측": 요소별,
             "전체개수": len(all_data)
         })
 
