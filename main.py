@@ -1,4 +1,4 @@
-# ✅ main.py - Supabase 연동 + 3가지 분석기 기반 예측 시스템
+# ✅ main.py - Supabase 연동 + 3가지 분석기 기반 예측 시스템 + 예측회차 포함
 from flask import Flask, jsonify, send_from_directory
 from collections import defaultdict, Counter
 import random
@@ -32,8 +32,10 @@ def predict_analysis():
     # 1. Supabase에서 데이터 로딩
     result = supa.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(LIMIT).execute()
     all_data = [convert(row) for row in reversed(result.data)]
+    round_num = int(result.data[0]["date_round"]) + 1 if result.data else "?"
 
     predictions = {
+        "예측회차": round_num,
         "강화학습 기반": predict_reinforcement(all_data),
         "상대 비교 기반": predict_relative(all_data),
         "부트스트랩 기반": predict_bootstrap(all_data)
