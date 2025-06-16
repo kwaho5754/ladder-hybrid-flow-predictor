@@ -8,7 +8,7 @@
 <script>
 async function loadFlowPrediction() {
   try {
-    const res = await fetch("/predict_flow");
+    const res = await fetch("http://localhost:5000/predict_flow");
     const data = await res.json();
 
     const box = document.getElementById("flow-result");
