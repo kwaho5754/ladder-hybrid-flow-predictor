@@ -1,8 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>사다리 흐름 예측</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    .summary-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    h2 { color: #333; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+
 <div class="summary-box">
   <h2>🔮 흐름 기반 예측 (최근 4줄 기준)</h2>
-  <div id="flow-result">
-    <!-- 자바스크립트로 채워짐 -->
-  </div>
+  <div id="flow-result">불러오는 중...</div>
 </div>
 
 <script>
@@ -17,16 +29,12 @@ async function loadFlowPrediction() {
 
       <h4>📌 방향 흐름: ${data["최근방향흐름"].join(" → ")}</h4>
       <ul>
-        ${data["방향예측값"].map(v => `
-          <li>${v.값} (${v.빈도}회)</li>
-        `).join("")}
+        ${data["방향예측값"].map(v => `<li>${v.값} (${v.빈도}회)</li>`).join("")}
       </ul>
 
       <h4>📌 홀짝 흐름: ${data["최근홀짝흐름"].join(" → ")}</h4>
       <ul>
-        ${data["홀짝예측값"].map(v => `
-          <li>${v.값} (${v.빈도}회)</li>
-        `).join("")}
+        ${data["홀짝예측값"].map(v => `<li>${v.값} (${v.빈도}회)</li>`).join("")}
       </ul>
 
       <h4>🧭 방향 매칭 순번</h4>
@@ -43,3 +51,6 @@ async function loadFlowPrediction() {
 
 loadFlowPrediction();
 </script>
+
+</body>
+</html>
