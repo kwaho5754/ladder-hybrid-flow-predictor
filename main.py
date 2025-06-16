@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-from flask_cors import CORS  # ✅ 추가
+from flask_cors import CORS
 from supabase import create_client
 from collections import Counter
 import os
