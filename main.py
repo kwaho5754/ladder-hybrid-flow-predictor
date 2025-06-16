@@ -1,35 +1,27 @@
 from flask import Flask, jsonify
-from flask_cors import CORS
-from supabase import create_client, Client
-from dotenv import load_dotenv
-import os
+from supabase import create_client
 from collections import Counter
-
-load_dotenv()
+import os
 
 app = Flask(__name__)
-CORS(app)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladders")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def parse_block(s):
-    return s[0], s[1:-1], s[-1]  # 좌/우, 줄수, 홀/짝
+def convert(d):
+    return d["result"]
 
-def convert(entry):
-    side = '좌' if entry['start_point'] == 'LEFT' else '우'
-    count = str(entry['line_count'])
-    oe = '짝' if entry['odd_even'] == 'EVEN' else '홀'
-    return f"{side}{count}{oe}"
+def extract_direction(block):
+    result = []
+    for i in range(len(block)-1):
+        result.append("좌" if block[i] == block[i+1] else "우")
+    return result
 
-def extract_direction(blocks):
-    return [parse_block(b)[0] for b in blocks]
-
-def extract_parity(blocks):
-    return [parse_block(b)[2] for b in blocks]
+def extract_parity(block):
+    return ["짝" if b in ["짝", "우삼짝", "좌사짝"] else "홀" for b in block]
 
 @app.route("/predict_flow")
 def predict_flow():
@@ -82,6 +74,5 @@ def predict_flow():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT") or 5000)
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    app.run(debug=True)
