@@ -1,9 +1,11 @@
 from flask import Flask, jsonify
+from flask_cors import CORS  # ✅ 추가
 from supabase import create_client
 from collections import Counter
 import os
 
 app = Flask(__name__)
+CORS(app)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
