@@ -1,56 +1,217 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>사다리 흐름 예측</title>
+  <meta charset="UTF-8" />
+  <title>사다리 블럭 예측 결과</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
-    .summary-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    h2 { color: #333; }
-    ul { padding-left: 20px; }
+    body {
+      font-family: "Noto Sans KR", sans-serif;
+      background: #f4f7ff;
+      padding: 2rem;
+    }
+    h1 {
+      font-size: 1.8rem;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    #round-info {
+      font-size: 1rem;
+      color: #555;
+      margin-left: 0.5rem;
+    }
+    .summary-box {
+      max-width: 1000px;
+      margin: 0 auto 2rem auto;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.1);
+      padding: 1rem;
+    }
+    .summary-box h2 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .summary-row {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      justify-content: space-around;
+    }
+    .summary-half {
+      flex: 1;
+      min-width: 480px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 0.6rem;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+      font-size: 0.95rem;
+    }
+    th {
+      background: #eef2ff;
+    }
   </style>
 </head>
 <body>
+  <h1>
+    🔮 사다리 블럭 예측 결과
+    <span id="round-info">(예측 회차: 불러오는 중...)</span>
+  </h1>
 
-<div class="summary-box">
-  <h2>🔮 흐름 기반 예측 (최근 4줄 기준)</h2>
-  <div id="flow-result">불러오는 중...</div>
-</div>
+  <div id="results"></div>
+  <div id="frequency-summary"></div>
 
-<script>
-async function loadFlowPrediction() {
-  try {
-    const res = await fetch("http://localhost:5000/predict_flow");
-    const data = await res.json();
+  <script>
+    async function loadLatestRound() {
+      try {
+        const res = await fetch('/latest_round');
+        const data = await res.json();
+        document.getElementById("round-info").textContent = `(예측 회차: ${data.round}회)`;
+      } catch (e) {
+        console.error("예측 회차 불러오기 실패", e);
+      }
+    }
 
-    const box = document.getElementById("flow-result");
-    box.innerHTML = `
-      <p><strong>예측회차:</strong> ${data["예측회차"]}</p>
+    async function loadResults() {
+      const resultContainer = document.getElementById("results");
+      const freqContainer = document.getElementById("frequency-summary");
+      resultContainer.innerHTML = "";
+      freqContainer.innerHTML = "";
 
-      <h4>📌 방향 흐름: ${data["최근방향흐름"].join(" → ")}</h4>
-      <ul>
-        ${data["방향예측값"].map(v => `<li>${v.값} (${v.빈도}회)</li>`).join("")}
-      </ul>
+      const modes = [
+        "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
+        "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even"
+      ];
 
-      <h4>📌 홀짝 흐름: ${data["최근홀짝흐름"].join(" → ")}</h4>
-      <ul>
-        ${data["홀짝예측값"].map(v => `<li>${v.값} (${v.빈도}회)</li>`).join("")}
-      </ul>
+      const limits = [1, 2];
+      const topTrack = {}, bottomTrack = {}, topRounds = {}, bottomRounds = {};
+      const fetchPromises = [];
 
-      <h4>🧭 방향 매칭 순번</h4>
-      <p>${data["방향매칭"].map(m => m.순번).join(", ")}</p>
+      const transformLabel = {
+        "orig": "원본",
+        "flip_full": "대칭",
+        "flip_start": "시작점",
+        "flip_odd_even": "홀짝"
+      };
 
-      <h4>🧭 홀짝 매칭 순번</h4>
-      <p>${data["홀짝매칭"].map(m => m.순번).join(", ")}</p>
-    `;
-  } catch (e) {
-    document.getElementById("flow-result").textContent = "❌ 흐름 예측 로딩 실패";
-    console.error(e);
-  }
-}
+      for (const limit of limits) {
+        for (const mode of modes) {
+          fetchPromises.push(
+            fetch(`/predict?mode=${mode}&limit=${limit}`)
+              .then(res => res.json())
+              .then(data => {
+                const blockType = mode.startsWith("3block") ? "3BL" : "4BL";
+                const transformKey = Object.keys(transformLabel).find(k => mode.includes(k));
+                const transformName = transformLabel[transformKey] || "원본";
 
-loadFlowPrediction();
-</script>
+                const topItem = data["상단값들"][limit - 1];
+                const bottomItem = data["하단값들"][limit - 1];
 
+                if (topItem?.값) {
+                  if (!topTrack[topItem.값]) topTrack[topItem.값] = [];
+                  topTrack[topItem.값].push({ 순번: topItem.순번, 블럭: blockType, 방식: transformName });
+                  topRounds[topItem.값] = (topRounds[topItem.값] || 0) + 1;
+                }
+
+                if (bottomItem?.값) {
+                  if (!bottomTrack[bottomItem.값]) bottomTrack[bottomItem.값] = [];
+                  bottomTrack[bottomItem.값].push({ 순번: bottomItem.순번, 블럭: blockType, 방식: transformName });
+                  bottomRounds[bottomItem.값] = (bottomRounds[bottomItem.값] || 0) + 1;
+                }
+              })
+              .catch(e => console.error("예측 실패", mode, limit, e))
+          );
+        }
+      }
+
+      await Promise.all(fetchPromises);
+
+      const container = document.createElement("div");
+      container.className = "summary-box";
+
+      const row = document.createElement("div");
+      row.className = "summary-row";
+
+      const topBox = document.createElement("div");
+      topBox.className = "summary-half";
+      topBox.innerHTML = `<h2>📊 예측 전체 상단값 순번 추적</h2>${renderTable(topTrack, topRounds)}`;
+
+      const bottomBox = document.createElement("div");
+      bottomBox.className = "summary-half";
+      bottomBox.innerHTML = `<h2>📊 예측 전체 하단값 순번 추적</h2>${renderTable(bottomTrack, bottomRounds)}`;
+
+      row.appendChild(topBox);
+      row.appendChild(bottomBox);
+      container.appendChild(row);
+      resultContainer.appendChild(container);
+
+      // 📌 추가: 3BL/4BL 상하단 빈도 요약 출력
+      const freqBox = document.createElement("div");
+      freqBox.className = "summary-box";
+
+      freqBox.innerHTML = `
+        <h2>📌 블럭 종류별 상하단 예측값 빈도 요약</h2>
+        ${renderFrequencyTable("3BL", "상단", topTrack, topRounds)}
+        ${renderFrequencyTable("4BL", "상단", topTrack, topRounds)}
+        ${renderFrequencyTable("3BL", "하단", bottomTrack, bottomRounds)}
+        ${renderFrequencyTable("4BL", "하단", bottomTrack, bottomRounds)}
+      `;
+      freqContainer.appendChild(freqBox);
+    }
+
+    function renderTable(trackMap, countMap) {
+      return `
+        <table>
+          <thead><tr><th>값</th><th>출현횟수</th><th>순번 상세</th></tr></thead>
+          <tbody>
+            ${Object.entries(trackMap).map(([val, arr]) => {
+              const sortedArr = arr.slice().sort((a, b) => {
+                const aBL = a.블럭.startsWith("3") ? 0 : 1;
+                const bBL = b.블럭.startsWith("3") ? 0 : 1;
+                if (aBL !== bBL) return aBL - bBL;
+                return parseInt(a.순번) - parseInt(b.순번);
+              });
+
+              const 순번들 = sortedArr.map(obj =>
+                `순번 ${obj.순번} (${obj.블럭}, ${obj.방식})`
+              ).join("<br>");
+
+              return `<tr><td>${val}</td><td>${countMap[val]}</td><td>${순번들}</td></tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderFrequencyTable(blockType, position, trackMap, countMap) {
+      const filtered = Object.entries(trackMap).filter(([_, arr]) =>
+        arr.some(item => item.블럭 === blockType)
+      );
+
+      const counted = filtered.map(([val, arr]) => {
+        const count = arr.filter(item => item.블럭 === blockType).length;
+        return { val, count };
+      }).sort((a, b) => b.count - a.count);
+
+      return `
+        <h3>📌 ${blockType} ${position}값 빈도</h3>
+        <table>
+          <thead><tr><th>값</th><th>출현횟수</th></tr></thead>
+          <tbody>
+            ${counted.map(row =>
+              `<tr><td>${row.val}</td><td>${row.count}</td></tr>`
+            ).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    loadLatestRound();
+    loadResults();
+  </script>
 </body>
 </html>
