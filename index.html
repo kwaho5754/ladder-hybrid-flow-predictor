@@ -69,7 +69,16 @@
   <div id="limit-control">
     예측 개수:
     <select id="limit-selector">
-      ${[...Array(10).keys()].map(i => `<option value="${i+1}">${i+1}개</option>`).join("")}
+      <option value="1">1개</option>
+      <option value="2">2개</option>
+      <option value="3">3개</option>
+      <option value="4">4개</option>
+      <option value="5">5개</option>
+      <option value="6">6개</option>
+      <option value="7">7개</option>
+      <option value="8">8개</option>
+      <option value="9">9개</option>
+      <option value="10" selected>10개</option>
     </select>
   </div>
 
@@ -219,12 +228,14 @@
       `;
     }
 
+    // ✅ 드롭다운 이벤트 연결
     document.getElementById("limit-selector").addEventListener("change", function (e) {
-      loadResults(parseInt(e.target.value));
+      const selected = parseInt(e.target.value);
+      loadResults(selected);
     });
 
     loadLatestRound();
-    loadResults(1); // 초기 기본값
+    loadResults(10); // 기본 10개 표시
   </script>
 </body>
 </html>
