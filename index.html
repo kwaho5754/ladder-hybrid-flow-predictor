@@ -67,18 +67,18 @@
   </h1>
 
   <div id="limit-control">
-    예측 개수:
+    예측 순번:
     <select id="limit-selector">
-      <option value="1">1개</option>
-      <option value="2">2개</option>
-      <option value="3">3개</option>
-      <option value="4">4개</option>
-      <option value="5">5개</option>
-      <option value="6">6개</option>
-      <option value="7">7개</option>
-      <option value="8">8개</option>
-      <option value="9">9개</option>
-      <option value="10" selected>10개</option>
+      <option value="1">1번</option>
+      <option value="2">2번</option>
+      <option value="3">3번</option>
+      <option value="4">4번</option>
+      <option value="5">5번</option>
+      <option value="6">6번</option>
+      <option value="7">7번</option>
+      <option value="8">8번</option>
+      <option value="9">9번</option>
+      <option value="10" selected>10번</option>
     </select>
   </div>
 
@@ -96,7 +96,7 @@
       }
     }
 
-    async function loadResults(limitCount) {
+    async function loadResults(limitIndex) {
       const resultContainer = document.getElementById("results");
       const freqContainer = document.getElementById("frequency-summary");
       resultContainer.innerHTML = "";
@@ -107,7 +107,7 @@
         "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even"
       ];
 
-      const limits = Array.from({ length: limitCount }, (_, i) => i + 1);
+      const limits = [limitIndex]; // ✅ 선택한 하나만 요청
       const topTrack = {}, bottomTrack = {}, topRounds = {}, bottomRounds = {};
       const fetchPromises = [];
 
@@ -158,11 +158,11 @@
 
       const topBox = document.createElement("div");
       topBox.className = "summary-half";
-      topBox.innerHTML = `<h2>📊 예측 전체 상단값 순번 추적</h2>${renderTable(topTrack, topRounds)}`;
+      topBox.innerHTML = `<h2>📊 예측 ${limitIndex}번 상단값 추적</h2>${renderTable(topTrack, topRounds)}`;
 
       const bottomBox = document.createElement("div");
       bottomBox.className = "summary-half";
-      bottomBox.innerHTML = `<h2>📊 예측 전체 하단값 순번 추적</h2>${renderTable(bottomTrack, bottomRounds)}`;
+      bottomBox.innerHTML = `<h2>📊 예측 ${limitIndex}번 하단값 추적</h2>${renderTable(bottomTrack, bottomRounds)}`;
 
       row.appendChild(topBox);
       row.appendChild(bottomBox);
@@ -172,7 +172,7 @@
       const freqBox = document.createElement("div");
       freqBox.className = "summary-box";
       freqBox.innerHTML = `
-        <h2>📌 블럭 종류별 상하단 예측값 빈도 요약</h2>
+        <h2>📌 ${limitIndex}번 순위 블럭 종류별 예측값 빈도</h2>
         ${renderFrequencyTable("3BL", "상단", topTrack, topRounds)}
         ${renderFrequencyTable("4BL", "상단", topTrack, topRounds)}
         ${renderFrequencyTable("3BL", "하단", bottomTrack, bottomRounds)}
@@ -228,14 +228,14 @@
       `;
     }
 
-    // ✅ 드롭다운 이벤트 연결
+    // ✅ 드롭다운 연결
     document.getElementById("limit-selector").addEventListener("change", function (e) {
       const selected = parseInt(e.target.value);
       loadResults(selected);
     });
 
     loadLatestRound();
-    loadResults(10); // 기본 10개 표시
+    loadResults(10); // 기본값: 10번 순위
   </script>
 </body>
 </html>
