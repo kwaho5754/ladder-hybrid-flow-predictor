@@ -12,12 +12,16 @@
     h1 {
       font-size: 1.8rem;
       text-align: center;
-      margin-bottom: 2rem;
+      margin-bottom: 0.5rem;
     }
     #round-info {
       font-size: 1rem;
       color: #555;
       margin-left: 0.5rem;
+    }
+    #limit-control {
+      text-align: center;
+      margin-bottom: 2rem;
     }
     .summary-box {
       max-width: 1000px;
@@ -62,6 +66,13 @@
     <span id="round-info">(예측 회차: 불러오는 중...)</span>
   </h1>
 
+  <div id="limit-control">
+    예측 개수:
+    <select id="limit-selector">
+      ${[...Array(10).keys()].map(i => `<option value="${i+1}">${i+1}개</option>`).join("")}
+    </select>
+  </div>
+
   <div id="results"></div>
   <div id="frequency-summary"></div>
 
@@ -76,7 +87,7 @@
       }
     }
 
-    async function loadResults() {
+    async function loadResults(limitCount) {
       const resultContainer = document.getElementById("results");
       const freqContainer = document.getElementById("frequency-summary");
       resultContainer.innerHTML = "";
@@ -87,7 +98,7 @@
         "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even"
       ];
 
-      const limits = [1, 2, 3, 4];
+      const limits = Array.from({ length: limitCount }, (_, i) => i + 1);
       const topTrack = {}, bottomTrack = {}, topRounds = {}, bottomRounds = {};
       const fetchPromises = [];
 
@@ -149,10 +160,8 @@
       container.appendChild(row);
       resultContainer.appendChild(container);
 
-      // 📌 추가: 3BL/4BL 상하단 빈도 요약 출력
       const freqBox = document.createElement("div");
       freqBox.className = "summary-box";
-
       freqBox.innerHTML = `
         <h2>📌 블럭 종류별 상하단 예측값 빈도 요약</h2>
         ${renderFrequencyTable("3BL", "상단", topTrack, topRounds)}
@@ -210,8 +219,12 @@
       `;
     }
 
+    document.getElementById("limit-selector").addEventListener("change", function (e) {
+      loadResults(parseInt(e.target.value));
+    });
+
     loadLatestRound();
-    loadResults();
+    loadResults(1); // 초기 기본값
   </script>
 </body>
 </html>
