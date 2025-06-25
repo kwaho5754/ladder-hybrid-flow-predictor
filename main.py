@@ -34,18 +34,15 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def is_overlapping(i, block_len, existing_matches):
-    for existing_start, existing_len in existing_matches:
-        if max(i, existing_start) < min(i + block_len, existing_start + existing_len):
-            return True
-    return False
+def is_overlapping(i, block_len, used_positions):
+    return any(j in used_positions for j in range(i, i + block_len))
 
-def find_all_matches(block, full_data, block_len, existing_matches):
+def find_all_matches_exclusive(block, full_data, block_len, used_positions):
     top_matches = []
     bottom_matches = []
 
     for i in reversed(range(len(full_data) - block_len)):
-        if is_overlapping(i, block_len, existing_matches):
+        if is_overlapping(i, block_len, used_positions):
             continue
 
         candidate = full_data[i:i + block_len]
@@ -59,7 +56,7 @@ def find_all_matches(block, full_data, block_len, existing_matches):
             top_matches.append({"값": top_value, "블럭": ">".join(block), "순번": i + 1})
             bottom_matches.append({"값": bottom_value, "블럭": ">".join(block), "순번": i + 1})
 
-            existing_matches.append((i, block_len))
+            used_positions.update(range(i, i + block_len))
 
     if not top_matches:
         top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
@@ -96,8 +93,8 @@ def predict():
         else:
             flow = recent_flow
 
-        existing_matches = []
-        top, bottom = find_all_matches(flow, all_data, size, existing_matches)
+        used_positions = set()
+        top, bottom = find_all_matches_exclusive(flow, all_data, size, used_positions)
 
         return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
 
@@ -112,10 +109,9 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        all_existing_matches = {}  # 🔥 블럭 줄 수 별 겹침 관리
+        used_positions = set()  # 모든 줄 수에 대해 공통적으로 공유
 
-        for size in [3, 4, 5, 6]:
-            existing_matches = all_existing_matches.setdefault(size, [])
+        for size in [6, 5, 4, 3]:  # 6줄부터 먼저 매칭
             recent_block = all_data[:size]
             transform_modes = {
                 "orig": lambda x: x,
@@ -129,7 +125,7 @@ def predict_top3_summary():
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data, size, existing_matches)
+                top, bottom = find_all_matches_exclusive(flow, all_data, size, used_positions)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
