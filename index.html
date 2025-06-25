@@ -4,238 +4,161 @@
   <meta charset="UTF-8" />
   <title>사다리 블럭 예측 결과</title>
   <style>
-    body {
-      font-family: "Noto Sans KR", sans-serif;
-      background: #f4f7ff;
-      padding: 2rem;
-    }
-    h1 {
-      font-size: 1.8rem;
-      text-align: center;
-      margin-bottom: 0.5rem;
-    }
-    #round-info {
-      font-size: 1rem;
-      color: #555;
-      margin-left: 0.5rem;
-    }
-    #limit-control {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
+    body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
+    h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
     .summary-box {
-      max-width: 1000px;
-      margin: 0 auto 2rem auto;
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 0 6px rgba(0,0,0,0.1);
-      padding: 1rem;
+      max-width: 700px; margin: 0 auto 2rem auto;
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.1); padding: 1rem;
     }
-    .summary-box h2 {
-      text-align: center;
-      margin-bottom: 1rem;
+    .summary-box table { width: 100%; border-collapse: collapse; }
+    .summary-box th, .summary-box td {
+      padding: 0.6rem; border-bottom: 1px solid #ddd; text-align: center;
     }
-    .summary-row {
-      display: flex;
-      gap: 2rem;
-      flex-wrap: wrap;
-      justify-content: space-around;
+    .summary-box th { background: #eef2ff; }
+    .section { margin-bottom: 3rem; }
+    .card-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card {
+      background: #fff; padding: 1rem; border-radius: 0.8rem;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1); width: 280px;
     }
-    .summary-half {
-      flex: 1;
-      min-width: 480px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      padding: 0.6rem;
-      border-bottom: 1px solid #ddd;
-      text-align: left;
-      font-size: 0.95rem;
-    }
-    th {
-      background: #eef2ff;
-    }
+    .card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .card h4 { font-size: 0.95rem; margin-top: 0.8rem; margin-bottom: 0.4rem; }
+    .card ol { padding-left: 1.2rem; }
+    .card li { font-size: 0.9rem; margin-bottom: 0.4rem; }
   </style>
 </head>
 <body>
-  <h1>
-    🔮 사다리 블럭 예측 결과
-    <span id="round-info">(예측 회차: 불러오는 중...)</span>
-  </h1>
+  <h1>🔮 사다리 블럭 예측 결과</h1>
 
-  <div id="limit-control">
-    예측 순번:
-    <select id="limit-selector">
-      <option value="1">1번</option>
-      <option value="2">2번</option>
-      <option value="3">3번</option>
-      <option value="4">4번</option>
-      <option value="5">5번</option>
-      <option value="6">6번</option>
-      <option value="7">7번</option>
-      <option value="8">8번</option>
-      <option value="9">9번</option>
-      <option value="10" selected>10번</option>
-    </select>
+  <!-- ✅ Top3 요약 테이블 (3줄 + 4줄 블럭, 원본 제외) -->
+  <div class="summary-box">
+    <table>
+      <thead>
+        <tr>
+          <th>블럭</th>
+          <th>Top3 상단값</th>
+          <th>Top3 하단값</th>
+        </tr>
+      </thead>
+      <tbody id="top3-summary-body">
+        <!-- JS에서 채워짐 -->
+      </tbody>
+    </table>
   </div>
 
   <div id="results"></div>
-  <div id="frequency-summary"></div>
 
   <script>
-    async function loadLatestRound() {
-      try {
-        const res = await fetch('/latest_round');
-        const data = await res.json();
-        document.getElementById("round-info").textContent = `(예측 회차: ${data.round}회)`;
-      } catch (e) {
-        console.error("예측 회차 불러오기 실패", e);
+    const modes = [
+      "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
+      "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even",
+      "5block_orig", "5block_flip_full", "5block_flip_start", "5block_flip_odd_even",
+      "6block_orig", "6block_flip_full", "6block_flip_start", "6block_flip_odd_even"
+    ];
+
+    const modeTitles = {
+      "3block": "3줄 블럭", "4block": "4줄 블럭",
+      "5block": "5줄 블럭", "6block": "6줄 블럭"
+    };
+
+    const transformLabel = {
+      "orig": "원본", "flip_start": "시작점 변형",
+      "flip_odd_even": "홀짝 변형", "flip_full": "완전 대칭"
+    };
+
+    const getModeKey = (mode) => mode.split("_")[0];
+
+    function createCard(mode, data) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const mkey = getModeKey(mode);
+      const typeKey = mode.split("_").slice(1).join("_");
+
+      const label = document.createElement("h3");
+      label.textContent = `${modeTitles[mkey]} (${transformLabel[typeKey]}) (회차 ${data["예측회차"]})`;
+      card.appendChild(label);
+
+      const topLabel = document.createElement("h4");
+      topLabel.textContent = "🔺 상단값 예측";
+      card.appendChild(topLabel);
+
+      const topList = document.createElement("ol");
+      for (const match of data["상단값들"] || []) {
+        const item = document.createElement("li");
+        item.textContent = `${match["값"]} | 블럭: ${match["블럭"]} | 순번: ${match["순번"]}`;
+        topList.appendChild(item);
+      }
+      card.appendChild(topList);
+
+      const bottomLabel = document.createElement("h4");
+      bottomLabel.textContent = "🔻 하단값 예측";
+      card.appendChild(bottomLabel);
+
+      const bottomList = document.createElement("ol");
+      for (const match of data["하단값들"] || []) {
+        const item = document.createElement("li");
+        item.textContent = `${match["값"]} | 블럭: ${match["블럭"]} | 순번: ${match["순번"]}`;
+        bottomList.appendChild(item);
+      }
+      card.appendChild(bottomList);
+
+      return card;
+    }
+
+    async function loadTop3Summary() {
+      const res = await fetch("/predict_top3_summary");
+      const data = await res.json();
+      const tbody = document.getElementById("top3-summary-body");
+
+      for (const key of Object.keys(data)) {
+        const info = data[key];
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${key.replace(" Top3 요약", "")}</td>
+          <td>${info["Top3상단"].join(", ")}</td>
+          <td>${info["Top3하단"].join(", ")}</td>
+        `;
+        tbody.appendChild(row);
       }
     }
 
-    async function loadResults(limitIndex) {
+    async function loadResults() {
       const resultContainer = document.getElementById("results");
-      const freqContainer = document.getElementById("frequency-summary");
-      resultContainer.innerHTML = "";
-      freqContainer.innerHTML = "";
+      const sectionMap = {};
 
-      const modes = [
-        "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
-        "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even"
-      ];
+      for (const mode of modes) {
+        try {
+          const res = await fetch(`/predict?mode=${mode}`);
+          const data = await res.json();
 
-      const limits = [limitIndex]; // ✅ 선택한 하나만 요청
-      const topTrack = {}, bottomTrack = {}, topRounds = {}, bottomRounds = {};
-      const fetchPromises = [];
+          const sectionKey = getModeKey(mode);
+          if (!sectionMap[sectionKey]) {
+            const section = document.createElement("div");
+            section.className = "section";
 
-      const transformLabel = {
-        "orig": "원본",
-        "flip_full": "대칭",
-        "flip_start": "시작점",
-        "flip_odd_even": "홀짝"
-      };
+            const title = document.createElement("h2");
+            title.textContent = modeTitles[sectionKey];
+            section.appendChild(title);
 
-      for (const limit of limits) {
-        for (const mode of modes) {
-          fetchPromises.push(
-            fetch(`/predict?mode=${mode}&limit=${limit}`)
-              .then(res => res.json())
-              .then(data => {
-                const blockType = mode.startsWith("3block") ? "3BL" : "4BL";
-                const transformKey = Object.keys(transformLabel).find(k => mode.includes(k));
-                const transformName = transformLabel[transformKey] || "원본";
+            const row = document.createElement("div");
+            row.className = "card-row";
+            section.appendChild(row);
 
-                const topItem = data["상단값들"][limit - 1];
-                const bottomItem = data["하단값들"][limit - 1];
+            resultContainer.appendChild(section);
+            sectionMap[sectionKey] = row;
+          }
 
-                if (topItem?.값) {
-                  if (!topTrack[topItem.값]) topTrack[topItem.값] = [];
-                  topTrack[topItem.값].push({ 순번: topItem.순번, 블럭: blockType, 방식: transformName });
-                  topRounds[topItem.값] = (topRounds[topItem.값] || 0) + 1;
-                }
-
-                if (bottomItem?.값) {
-                  if (!bottomTrack[bottomItem.값]) bottomTrack[bottomItem.값] = [];
-                  bottomTrack[bottomItem.값].push({ 순번: bottomItem.순번, 블럭: blockType, 방식: transformName });
-                  bottomRounds[bottomItem.값] = (bottomRounds[bottomItem.값] || 0) + 1;
-                }
-              })
-              .catch(e => console.error("예측 실패", mode, limit, e))
-          );
+          sectionMap[sectionKey].appendChild(createCard(mode, data));
+        } catch (e) {
+          console.error(`❌ 오류: ${mode} 예측 결과 불러오기 실패`, e);
         }
       }
-
-      await Promise.all(fetchPromises);
-
-      const container = document.createElement("div");
-      container.className = "summary-box";
-
-      const row = document.createElement("div");
-      row.className = "summary-row";
-
-      const topBox = document.createElement("div");
-      topBox.className = "summary-half";
-      topBox.innerHTML = `<h2>📊 예측 ${limitIndex}번 상단값 추적</h2>${renderTable(topTrack, topRounds)}`;
-
-      const bottomBox = document.createElement("div");
-      bottomBox.className = "summary-half";
-      bottomBox.innerHTML = `<h2>📊 예측 ${limitIndex}번 하단값 추적</h2>${renderTable(bottomTrack, bottomRounds)}`;
-
-      row.appendChild(topBox);
-      row.appendChild(bottomBox);
-      container.appendChild(row);
-      resultContainer.appendChild(container);
-
-      const freqBox = document.createElement("div");
-      freqBox.className = "summary-box";
-      freqBox.innerHTML = `
-        <h2>📌 ${limitIndex}번 순위 블럭 종류별 예측값 빈도</h2>
-        ${renderFrequencyTable("3BL", "상단", topTrack, topRounds)}
-        ${renderFrequencyTable("4BL", "상단", topTrack, topRounds)}
-        ${renderFrequencyTable("3BL", "하단", bottomTrack, bottomRounds)}
-        ${renderFrequencyTable("4BL", "하단", bottomTrack, bottomRounds)}
-      `;
-      freqContainer.appendChild(freqBox);
     }
 
-    function renderTable(trackMap, countMap) {
-      return `
-        <table>
-          <thead><tr><th>값</th><th>출현횟수</th><th>순번 상세</th></tr></thead>
-          <tbody>
-            ${Object.entries(trackMap).map(([val, arr]) => {
-              const sortedArr = arr.slice().sort((a, b) => {
-                const aBL = a.블럭.startsWith("3") ? 0 : 1;
-                const bBL = b.블럭.startsWith("3") ? 0 : 1;
-                if (aBL !== bBL) return aBL - bBL;
-                return parseInt(a.순번) - parseInt(b.순번);
-              });
-
-              const 순번들 = sortedArr.map(obj =>
-                `순번 ${obj.순번} (${obj.블럭}, ${obj.방식})`
-              ).join("<br>");
-
-              return `<tr><td>${val}</td><td>${countMap[val]}</td><td>${순번들}</td></tr>`;
-            }).join("")}
-          </tbody>
-        </table>
-      `;
-    }
-
-    function renderFrequencyTable(blockType, position, trackMap, countMap) {
-      const filtered = Object.entries(trackMap).filter(([_, arr]) =>
-        arr.some(item => item.블럭 === blockType)
-      );
-
-      const counted = filtered.map(([val, arr]) => {
-        const count = arr.filter(item => item.블럭 === blockType).length;
-        return { val, count };
-      }).sort((a, b) => b.count - a.count);
-
-      return `
-        <h3>📌 ${blockType} ${position}값 빈도</h3>
-        <table>
-          <thead><tr><th>값</th><th>출현횟수</th></tr></thead>
-          <tbody>
-            ${counted.map(row =>
-              `<tr><td>${row.val}</td><td>${row.count}</td></tr>`
-            ).join("")}
-          </tbody>
-        </table>
-      `;
-    }
-
-    // ✅ 드롭다운 연결
-    document.getElementById("limit-selector").addEventListener("change", function (e) {
-      const selected = parseInt(e.target.value);
-      loadResults(selected);
-    });
-
-    loadLatestRound();
-    loadResults(10); // 기본값: 10번 순위
+    loadTop3Summary();
+    loadResults();
   </script>
 </body>
 </html>
