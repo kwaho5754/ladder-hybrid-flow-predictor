@@ -34,34 +34,32 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data, size, used):
+def is_overlapping(i, block_len, existing_matches):
+    for existing_start, existing_len in existing_matches:
+        if max(i, existing_start) < min(i + block_len, existing_start + existing_len):
+            return True
+    return False
+
+def find_all_matches(block, full_data, block_len, existing_matches):
     top_matches = []
     bottom_matches = []
-    block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
-        if i in used:
+        if is_overlapping(i, block_len, existing_matches):
             continue
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
             top_index = i - 1
-            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            top_matches.append({
-                "값": top_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
-
             bottom_index = i + block_len
-            bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-            bottom_matches.append({
-                "값": bottom_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
 
-            used.add(i)
+            top_value = full_data[top_index] if top_index >= 0 else "❌ 없음"
+            bottom_value = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
+
+            top_matches.append({"값": top_value, "블럭": ">".join(block), "순번": i + 1})
+            bottom_matches.append({"값": bottom_value, "블럭": ">".join(block), "순번": i + 1})
+
+            existing_matches.append((i, block_len))
 
     if not top_matches:
         top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
@@ -83,13 +81,7 @@ def predict():
         mode = request.args.get("mode", "3block_orig")
         size = int(mode[0])
 
-        response = supabase.table(SUPABASE_TABLE) \
-            .select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(7000) \
-            .execute()
-
+        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(7000).execute()
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
@@ -104,14 +96,10 @@ def predict():
         else:
             flow = recent_flow
 
-        used_indices = set()
-        top, bottom = find_all_matches(flow, all_data, size, used_indices)
+        existing_matches = []
+        top, bottom = find_all_matches(flow, all_data, size, existing_matches)
 
-        return jsonify({
-            "예측회차": round_num,
-            "상단값들": top,
-            "하단값들": bottom
-        })
+        return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
 
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -119,20 +107,12 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        from itertools import chain
-        response = supabase.table(SUPABASE_TABLE) \
-            .select("*") \
-            .order("reg_date", desc=True) \
-            .order("date_round", desc=True) \
-            .limit(3000) \
-            .execute()
-
+        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
         raw = response.data
         all_data = [convert(d) for d in raw]
 
         result = {}
-
-        for size in [3, 4]:
+        for size in [3, 4, 5, 6]:
             recent_block = all_data[:size]
             transform_modes = {
                 "orig": lambda x: x,
@@ -141,22 +121,19 @@ def predict_top3_summary():
                 "flip_odd_even": flip_odd_even
             }
 
-            used_indices = set()
             top_values = []
             bottom_values = []
+            existing_matches = []
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data, size, used_indices)
+                top, bottom = find_all_matches(flow, all_data, size, existing_matches)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
-            top_counter = Counter(top_values)
-            bottom_counter = Counter(bottom_values)
-
             result[f"{size}줄 블럭 Top3 요약"] = {
-                "Top3상단": [v[0] for v in top_counter.most_common(3)],
-                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
+                "Top3상단": [v[0] for v in Counter(top_values).most_common(3)],
+                "Top3하단": [v[0] for v in Counter(bottom_values).most_common(3)]
             }
 
         return jsonify(result)
