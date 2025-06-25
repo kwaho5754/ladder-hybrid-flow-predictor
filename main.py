@@ -16,9 +16,6 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ✅ 블럭 간 하단 중복값 추적용 전역 집합
-used_bottom_values = set()
-
 def convert(entry):
     side = '좌' if entry['start_point'] == 'LEFT' else '우'
     count = str(entry['line_count'])
@@ -38,8 +35,6 @@ def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
 def find_all_matches(block, full_data):
-    global used_bottom_values
-
     top_matches = []
     bottom_matches = []
     block_len = len(block)
@@ -57,15 +52,11 @@ def find_all_matches(block, full_data):
 
             bottom_index = i + block_len
             bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-
-            # ✅ 중복된 하단값은 제거
-            if bottom_pred != "❌ 없음" and bottom_pred not in used_bottom_values:
-                used_bottom_values.add(bottom_pred)
-                bottom_matches.append({
-                    "값": bottom_pred,
-                    "블럭": ">".join(block),
-                    "순번": i + 1
-                })
+            bottom_matches.append({
+                "값": bottom_pred,
+                "블럭": ">".join(block),
+                "순번": i + 1
+            })
 
     if not top_matches:
         top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
@@ -127,7 +118,7 @@ def predict_top3_summary():
             .select("*") \
             .order("reg_date", desc=True) \
             .order("date_round", desc=True) \
-            .limit(3000) \
+            .limit(7000) \
             .execute()
 
         raw = response.data
