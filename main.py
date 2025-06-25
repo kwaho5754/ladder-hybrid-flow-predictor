@@ -113,7 +113,6 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        from itertools import chain
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -140,8 +139,9 @@ def predict_top3_summary():
             for fn in transform_modes.values():
                 flow = fn(recent_block)
                 top, bottom = find_all_matches(flow, all_data)
-                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
-                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
+
+                top_values.extend([t["값"] for t in top if t["값"] != "❌ 없음"])
+                bottom_values.extend([b["값"] for b in bottom if b["값"] != "❌ 없음"])
 
             top_counter = Counter(top_values)
             bottom_counter = Counter(bottom_values)
