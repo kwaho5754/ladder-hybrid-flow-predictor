@@ -16,13 +16,6 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "ladder")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-used_indices_map = {
-    3: set(),
-    4: set(),
-    5: set(),
-    6: set()
-}
-
 def convert(entry):
     side = '좌' if entry['start_point'] == 'LEFT' else '우'
     count = str(entry['line_count'])
@@ -41,7 +34,7 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data, size):
+def find_all_matches(block, full_data, size, used_indices_map):
     top_matches = []
     bottom_matches = []
     block_len = len(block)
@@ -112,7 +105,10 @@ def predict():
         else:
             flow = recent_flow
 
-        top, bottom = find_all_matches(flow, all_data, size)
+        # 요청 단위 겹침 제거 맵 생성
+        used_indices_map = {3: set(), 4: set(), 5: set(), 6: set()}
+
+        top, bottom = find_all_matches(flow, all_data, size, used_indices_map)
 
         return jsonify({
             "예측회차": round_num,
@@ -139,7 +135,7 @@ def predict_top3_summary():
 
         result = {}
 
-        for size in [3, 4]:  # 3줄 + 4줄 블럭 포함
+        for size in [3, 4]:
             recent_block = all_data[:size]
             transform_modes = {
                 "flip_full": flip_full,
@@ -152,7 +148,8 @@ def predict_top3_summary():
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data, size)
+                used_indices_map = {3: set(), 4: set(), 5: set(), 6: set()}
+                top, bottom = find_all_matches(flow, all_data, size, used_indices_map)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
