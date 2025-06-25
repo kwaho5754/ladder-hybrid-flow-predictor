@@ -81,12 +81,12 @@ def predict_all():
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
-        recent_base = all_data[:6]  # a0~a5 기준 블럭 생성
+        recent_base = all_data[:6]  # a0~a5 기준 블럭 생성은 동일
 
         result = {}
         used_indices_by_size = {6: set(), 5: set(), 4: set(), 3: set()}
 
-        block_sizes = [6, 5, 4, 3]
+        block_sizes = [6, 5, 4, 3]  # 긴 줄 먼저 매칭
         transforms = {
             "orig": lambda x: x,
             "flip_full": flip_full,
@@ -95,12 +95,12 @@ def predict_all():
         }
 
         for size in block_sizes:
-            base_block = recent_base[:size]
+            base_block = recent_base[:size]  # 동일한 블럭 생성 기준 사용
             for transform_name, fn in transforms.items():
                 key = f"{size}block_{transform_name}"
                 flow = fn(base_block)
                 top, bottom, used = find_all_matches(flow, all_data, used_indices_by_size[size])
-                used_indices_by_size[size].update(used)
+                used_indices_by_size[size].update(used)  # 같은 줄수끼리만 겹침 방지
                 result[key] = {
                     "예측회차": round_num,
                     "상단값들": top,
