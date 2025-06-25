@@ -113,7 +113,6 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        from itertools import chain
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
             .order("reg_date", desc=True) \
@@ -122,14 +121,19 @@ def predict_top3_summary():
             .execute()
 
         raw = response.data
-        all_data = [convert(d) for d in raw]
+        converted_data = [convert(d) for d in raw]
 
         result = {}
-        used_range = 0
+        used_range = 0           # 예측 블럭 추출 시작 위치
+        used_match_range = 0     # 매칭 대상 데이터 시작 위치
 
-        for size in [4, 3]:  # 긴 블럭 먼저 처리
-            recent_block = all_data[used_range:used_range + size]
+        for size in [4, 3]:  # 긴 블럭 먼저
+            recent_block = converted_data[used_range:used_range + size]
             used_range += size
+
+            # 블럭 간 매칭 구간 겹치지 않도록 제한
+            matchable_data = converted_data[used_match_range:]
+            used_match_range += size
 
             transform_modes = {
                 "flip_full": flip_full,
@@ -142,7 +146,7 @@ def predict_top3_summary():
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data)
+                top, bottom = find_all_matches(flow, matchable_data)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
