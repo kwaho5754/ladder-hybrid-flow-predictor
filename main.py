@@ -40,7 +40,7 @@ def is_overlapping(i, block_len, used_ranges):
             return True
     return False
 
-def find_all_matches(flow, full_data, block_len, used_ranges, transform_fn):
+def find_all_matches_exclusive(flow, full_data, block_len, used_ranges, transform_fn):
     top_values = []
     bottom_values = []
 
@@ -71,7 +71,13 @@ def home():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
         raw = response.data
         all_data = [convert(d) for d in raw]
 
@@ -92,7 +98,7 @@ def predict_top3_summary():
 
             for label, fn in transform_fns:
                 flow = fn(recent_block)
-                top_vals, bottom_vals = find_all_matches(flow, all_data, size, used_ranges, fn)
+                top_vals, bottom_vals = find_all_matches_exclusive(flow, all_data, size, used_ranges, fn)
                 all_top += top_vals
                 all_bottom += bottom_vals
 
