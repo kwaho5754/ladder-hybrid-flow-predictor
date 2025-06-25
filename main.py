@@ -35,8 +35,8 @@ def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
 def is_overlapping(i, block_len, used_ranges):
-    for used_i, used_len in used_ranges:
-        if max(i, used_i) < min(i + block_len, used_i + used_len):
+    for start, length in used_ranges:
+        if max(i, start) < min(i + block_len, start + length):
             return True
     return False
 
@@ -83,7 +83,13 @@ def predict():
         mode = request.args.get("mode", "3block_orig")
         size = int(mode[0])
 
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(7000).execute()
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(7000) \
+            .execute()
+
         raw = response.data
         round_num = int(raw[0]["date_round"]) + 1
         all_data = [convert(d) for d in raw]
@@ -102,10 +108,15 @@ def predict():
             flow = recent_flow
             fn = lambda x: x
 
+        # 단일 요청 시에도 겹침 방지 적용 가능 (임시로 사용)
         used_ranges = []
         top, bottom = find_all_matches_exclusive(flow, all_data, size, used_ranges, fn)
 
-        return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
+        return jsonify({
+            "예측회차": round_num,
+            "상단값들": top,
+            "하단값들": bottom
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -113,7 +124,13 @@ def predict():
 @app.route("/predict_top3_summary")
 def predict_top3_summary():
     try:
-        response = supabase.table(SUPABASE_TABLE).select("*").order("reg_date", desc=True).order("date_round", desc=True).limit(3000).execute()
+        response = supabase.table(SUPABASE_TABLE) \
+            .select("*") \
+            .order("reg_date", desc=True) \
+            .order("date_round", desc=True) \
+            .limit(3000) \
+            .execute()
+
         raw = response.data
         all_data = [convert(d) for d in raw]
 
@@ -132,7 +149,7 @@ def predict_top3_summary():
             top_values = []
             bottom_values = []
 
-            for mode_name, fn in transform_modes.items():
+            for fn in transform_modes.values():
                 flow = fn(recent_block)
                 top, bottom = find_all_matches_exclusive(flow, all_data, size, used_ranges, fn)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
