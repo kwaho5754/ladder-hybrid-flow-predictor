@@ -34,11 +34,10 @@ def flip_start(block):
 def flip_odd_even(block):
     return [('우' if s == '좌' else '좌') + ('4' if c == '3' else '3') + o for s, c, o in map(parse_block, block)]
 
-def find_all_matches(block, full_data, size, used_indices_map):
+def find_all_matches(block, full_data, size, used):
     top_matches = []
     bottom_matches = []
     block_len = len(block)
-    used = used_indices_map[size]
 
     for i in reversed(range(len(full_data) - block_len)):
         if i in used:
@@ -105,10 +104,8 @@ def predict():
         else:
             flow = recent_flow
 
-        # 요청 단위 겹침 제거 맵 생성
-        used_indices_map = {3: set(), 4: set(), 5: set(), 6: set()}
-
-        top, bottom = find_all_matches(flow, all_data, size, used_indices_map)
+        used_indices = set()
+        top, bottom = find_all_matches(flow, all_data, size, used_indices)
 
         return jsonify({
             "예측회차": round_num,
@@ -138,18 +135,19 @@ def predict_top3_summary():
         for size in [3, 4]:
             recent_block = all_data[:size]
             transform_modes = {
+                "orig": lambda x: x,
                 "flip_full": flip_full,
                 "flip_start": flip_start,
                 "flip_odd_even": flip_odd_even
             }
 
+            used_indices = set()
             top_values = []
             bottom_values = []
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                used_indices_map = {3: set(), 4: set(), 5: set(), 6: set()}
-                top, bottom = find_all_matches(flow, all_data, size, used_indices_map)
+                top, bottom = find_all_matches(flow, all_data, size, used_indices)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
