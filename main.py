@@ -37,7 +37,7 @@ def flip_odd_even(block):
 def is_overlapping(i, block_len, used_positions):
     return any(j in used_positions for j in range(i, i + block_len))
 
-def find_all_matches_exclusive(block, full_data, block_len, used_positions):
+def find_all_matches_exclusive(flow, full_data, block_len, used_positions, transform_fn):
     top_matches = []
     bottom_matches = []
 
@@ -46,22 +46,24 @@ def find_all_matches_exclusive(block, full_data, block_len, used_positions):
             continue
 
         candidate = full_data[i:i + block_len]
-        if candidate == block:
+        transformed_candidate = transform_fn(candidate)
+
+        if transformed_candidate == flow:
             top_index = i - 1
             bottom_index = i + block_len
 
             top_value = full_data[top_index] if top_index >= 0 else "❌ 없음"
             bottom_value = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
 
-            top_matches.append({"값": top_value, "블럭": ">".join(block), "순번": i + 1})
-            bottom_matches.append({"값": bottom_value, "블럭": ">".join(block), "순번": i + 1})
+            top_matches.append({"값": top_value, "블럭": ">".join(flow), "순번": i + 1})
+            bottom_matches.append({"값": bottom_value, "블럭": ">".join(flow), "순번": i + 1})
 
             used_positions.update(range(i, i + block_len))
 
     if not top_matches:
-        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+        top_matches.append({"값": "❌ 없음", "블럭": ">".join(flow), "순번": "❌"})
     if not bottom_matches:
-        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(flow), "순번": "❌"})
 
     top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:20]
     bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:20]
@@ -86,15 +88,19 @@ def predict():
 
         if "flip_full" in mode:
             flow = flip_full(recent_flow)
+            fn = flip_full
         elif "flip_start" in mode:
             flow = flip_start(recent_flow)
+            fn = flip_start
         elif "flip_odd_even" in mode:
             flow = flip_odd_even(recent_flow)
+            fn = flip_odd_even
         else:
             flow = recent_flow
+            fn = lambda x: x
 
         used_positions = set()
-        top, bottom = find_all_matches_exclusive(flow, all_data, size, used_positions)
+        top, bottom = find_all_matches_exclusive(flow, all_data, size, used_positions, fn)
 
         return jsonify({"예측회차": round_num, "상단값들": top, "하단값들": bottom})
 
@@ -109,23 +115,23 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        used_positions = set()  # 모든 줄 수 블럭 공유 위치 기록
+        used_positions = set()  # 모든 블럭이 공통으로 공유
 
-        for size in [6, 5, 4, 3]:  # 큰 블럭부터 매칭
+        transform_modes = {
+            "orig": lambda x: x,
+            "flip_full": flip_full,
+            "flip_start": flip_start,
+            "flip_odd_even": flip_odd_even
+        }
+
+        for size in [6, 5, 4, 3]:  # 긴 블럭부터 우선
             recent_block = all_data[:size]
-            transform_modes = {
-                "orig": lambda x: x,
-                "flip_full": flip_full,
-                "flip_start": flip_start,
-                "flip_odd_even": flip_odd_even
-            }
-
             top_values = []
             bottom_values = []
 
-            for fn in transform_modes.values():
+            for mode_name, fn in transform_modes.items():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches_exclusive(flow, all_data, size, used_positions)
+                top, bottom = find_all_matches_exclusive(flow, all_data, size, used_positions, fn)
                 top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
                 bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
