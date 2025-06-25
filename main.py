@@ -112,8 +112,10 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
+        all_existing_matches = {}  # 🔥 블럭 줄 수 별 겹침 관리
+
         for size in [3, 4, 5, 6]:
-            existing_matches = []  # 🔥 각 줄 수 블럭별로 독립적인 겹침 제거
+            existing_matches = all_existing_matches.setdefault(size, [])
             recent_block = all_data[:size]
             transform_modes = {
                 "orig": lambda x: x,
