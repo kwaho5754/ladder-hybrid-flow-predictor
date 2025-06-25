@@ -41,8 +41,7 @@ def is_overlapping(i, block_len, used_ranges):
     return False
 
 def find_all_matches(block, full_data, used_ranges=None):
-    top_matches = []
-    bottom_matches = []
+    matches = []
     block_len = len(block)
 
     for i in reversed(range(len(full_data) - block_len)):
@@ -51,34 +50,21 @@ def find_all_matches(block, full_data, used_ranges=None):
 
         candidate = full_data[i:i + block_len]
         if candidate == block:
-            top_index = i - 1
-            top_pred = full_data[top_index] if top_index >= 0 else "❌ 없음"
-            top_matches.append({
-                "값": top_pred,
-                "블럭": ">".join(block),
-                "순번": i + 1
-            })
-
             bottom_index = i + block_len
             bottom_pred = full_data[bottom_index] if bottom_index < len(full_data) else "❌ 없음"
-            bottom_matches.append({
+            matches.append({
                 "값": bottom_pred,
                 "블럭": ">".join(block),
                 "순번": i + 1
             })
-
             if used_ranges is not None:
                 used_ranges.append((i, block_len))
 
-    if not top_matches:
-        top_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
-    if not bottom_matches:
-        bottom_matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
+    if not matches:
+        matches.append({"값": "❌ 없음", "블럭": ">".join(block), "순번": "❌"})
 
-    top_matches = sorted(top_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:20]
-    bottom_matches = sorted(bottom_matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:20]
-
-    return top_matches, bottom_matches
+    matches = sorted(matches, key=lambda x: int(x["순번"]) if str(x["순번"]).isdigit() else 99999)[:20]
+    return matches
 
 @app.route("/")
 def home():
@@ -150,11 +136,10 @@ def predict_top3_summary():
             recent_block = all_data[:size]
             for mode_name, transform_fn in transform_modes.items():
                 flow = transform_fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data, used_ranges)
+                bottom_matches = find_all_matches(flow, all_data, used_ranges)
 
-                result[f"{size}줄 블럭_{mode_name}_Top3상단"] = [t["값"] for t in top][:3]
-                result[f"{size}줄 블럭_{mode_name}_Top3하단"] = [b["값"] for b in bottom][:3]
-                result[f"{size}줄 블럭_{mode_name}_Top3순번"] = [b["순번"] for b in bottom][:3]
+                result[f"{size}줄 블럭_{mode_name}_Top3하단"] = [b["값"] for b in bottom_matches][:3]
+                result[f"{size}줄 블럭_{mode_name}_Top3순번"] = [b["순번"] for b in bottom_matches][:3]
 
         return jsonify(result)
 
