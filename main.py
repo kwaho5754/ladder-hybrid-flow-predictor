@@ -126,7 +126,7 @@ def predict_top3_summary():
 
         result = {}
 
-        for size in [3, 4]:  # 3줄 + 4줄 블럭 포함
+        for size in [3, 4]:
             recent_block = all_data[:size]
             transform_modes = {
                 "flip_full": flip_full,
@@ -147,8 +147,8 @@ def predict_top3_summary():
             bottom_counter = Counter(bottom_values)
 
             result[f"{size}줄 블럭 Top3 요약"] = {
-                "Top3상단": [v[0] for v in top_counter.most_common(3)],
-                "Top3하단": [v[0] for v in bottom_counter.most_common(3)]
+                "Top3상단": top_counter.most_common(3),
+                "Top3하단": bottom_counter.most_common(3)
             }
 
         return jsonify(result)

@@ -77,8 +77,7 @@
       const typeKey = mode.split("_").slice(1).join("_");
 
       const label = document.createElement("h3");
-      const matchCount = data["상단값들"]?.length || 0;
-      label.textContent = `${modeTitles[mkey]} (${transformLabel[typeKey]}) - 매칭 ${matchCount}회`;
+      label.textContent = `${modeTitles[mkey]} (${transformLabel[typeKey]}) (회차 ${data["예측회차"]})`;
       card.appendChild(label);
 
       const topLabel = document.createElement("h4");
@@ -115,11 +114,14 @@
 
       for (const key of Object.keys(data)) {
         const info = data[key];
+        const topFormatted = info["Top3상단"].map(v => `${v[0]}(${v[1]})`).join(", ");
+        const bottomFormatted = info["Top3하단"].map(v => `${v[0]}(${v[1]})`).join(", ");
+
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${key.replace(" Top3 요약", "")}</td>
-          <td>${info["Top3상단"].join(", ")}</td>
-          <td>${info["Top3하단"].join(", ")}</td>
+          <td>${topFormatted}</td>
+          <td>${bottomFormatted}</td>
         `;
         tbody.appendChild(row);
       }
