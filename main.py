@@ -109,9 +109,9 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
-        used_positions = set()  # 모든 줄 수에 대해 공통적으로 공유
+        used_positions = set()  # 모든 줄 수 블럭 공유 위치 기록
 
-        for size in [6, 5, 4, 3]:  # 6줄부터 먼저 매칭
+        for size in [6, 5, 4, 3]:  # 큰 블럭부터 매칭
             recent_block = all_data[:size]
             transform_modes = {
                 "orig": lambda x: x,
