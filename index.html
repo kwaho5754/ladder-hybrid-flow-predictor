@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>사다리 블랙 예측 결과</title>
+  <title>사다리 블럭 예측 결과</title>
   <style>
     body { font-family: "Noto Sans KR", sans-serif; background: #f4f7ff; padding: 2rem; }
     h1 { font-size: 1.8rem; text-align: center; margin-bottom: 2rem; }
@@ -29,38 +29,45 @@
   </style>
 </head>
 <body>
-  <h1>🔮 사다리 블랙 예측 결과</h1>
+  <h1>🔮 사다리 블럭 예측 결과</h1>
 
-  <!-- Top3 요약 테이블 (유지, 서버에서 분리제어 안 하므로 기존 방식 유지) -->
+  <!-- ✅ Top3 요약 테이블 (3줄 + 4줄 블럭, 원본 제외) -->
   <div class="summary-box">
     <table>
       <thead>
         <tr>
-          <th>블랙</th>
+          <th>블럭</th>
           <th>Top3 상단값</th>
           <th>Top3 하단값</th>
         </tr>
       </thead>
-      <tbody id="top3-summary-body"></tbody>
+      <tbody id="top3-summary-body">
+        <!-- JS에서 채워짐 -->
+      </tbody>
     </table>
   </div>
 
   <div id="results"></div>
 
   <script>
+    const modes = [
+      "3block_orig", "3block_flip_full", "3block_flip_start", "3block_flip_odd_even",
+      "4block_orig", "4block_flip_full", "4block_flip_start", "4block_flip_odd_even",
+      "5block_orig", "5block_flip_full", "5block_flip_start", "5block_flip_odd_even",
+      "6block_orig", "6block_flip_full", "6block_flip_start", "6block_flip_odd_even"
+    ];
+
     const modeTitles = {
-      "3block": "3줄 블랙", "4block": "4줄 블랙",
-      "5block": "5줄 블랙", "6block": "6줄 블랙"
+      "3block": "3줄 블럭", "4block": "4줄 블럭",
+      "5block": "5줄 블럭", "6block": "6줄 블럭"
     };
 
     const transformLabel = {
       "orig": "원본", "flip_start": "시작점 변형",
-      "flip_odd_even": "홀작 변형", "flip_full": "완전 대침"
+      "flip_odd_even": "홀짝 변형", "flip_full": "완전 대칭"
     };
 
-    function getModeKey(mode) {
-      return mode.split("_")[0];
-    }
+    const getModeKey = (mode) => mode.split("_")[0];
 
     function createCard(mode, data) {
       const card = document.createElement("div");
@@ -117,36 +124,41 @@
       }
     }
 
-    async function loadAllResults() {
-      const res = await fetch("/predict_all");
-      const allData = await res.json();
+    async function loadResults() {
       const resultContainer = document.getElementById("results");
       const sectionMap = {};
 
-      for (const mode of Object.keys(allData)) {
-        const sectionKey = getModeKey(mode);
-        if (!sectionMap[sectionKey]) {
-          const section = document.createElement("div");
-          section.className = "section";
+      for (const mode of modes) {
+        try {
+          const res = await fetch(`/predict?mode=${mode}`);
+          const data = await res.json();
 
-          const title = document.createElement("h2");
-          title.textContent = modeTitles[sectionKey];
-          section.appendChild(title);
+          const sectionKey = getModeKey(mode);
+          if (!sectionMap[sectionKey]) {
+            const section = document.createElement("div");
+            section.className = "section";
 
-          const row = document.createElement("div");
-          row.className = "card-row";
-          section.appendChild(row);
+            const title = document.createElement("h2");
+            title.textContent = modeTitles[sectionKey];
+            section.appendChild(title);
 
-          resultContainer.appendChild(section);
-          sectionMap[sectionKey] = row;
+            const row = document.createElement("div");
+            row.className = "card-row";
+            section.appendChild(row);
+
+            resultContainer.appendChild(section);
+            sectionMap[sectionKey] = row;
+          }
+
+          sectionMap[sectionKey].appendChild(createCard(mode, data));
+        } catch (e) {
+          console.error(`❌ 오류: ${mode} 예측 결과 불러오기 실패`, e);
         }
-
-        sectionMap[sectionKey].appendChild(createCard(mode, allData[mode]));
       }
     }
 
     loadTop3Summary();
-    loadAllResults();
+    loadResults();
   </script>
 </body>
 </html>
