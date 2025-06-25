@@ -113,6 +113,7 @@ def predict_top3_summary():
 
         result = {}
         for size in [3, 4, 5, 6]:
+            existing_matches = []  # 🔥 각 줄 수 블럭별로 독립적인 겹침 제거
             recent_block = all_data[:size]
             transform_modes = {
                 "orig": lambda x: x,
@@ -123,7 +124,6 @@ def predict_top3_summary():
 
             top_values = []
             bottom_values = []
-            existing_matches = []
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
