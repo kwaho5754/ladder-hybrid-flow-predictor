@@ -133,22 +133,18 @@ def predict_top3_summary():
                 "flip_odd_even": flip_odd_even
             }
 
-            top_values = []
-            bottom_values = []
+            top_all = []
+            bottom_all = []
 
             for fn in transform_modes.values():
                 flow = fn(recent_block)
-                top, bottom = find_all_matches(flow, all_data)
+                top_matches, bottom_matches = find_all_matches(flow, all_data)
+                top_all.extend([t["값"] for t in top_matches if t["값"] != "❌ 없음"])
+                bottom_all.extend([b["값"] for b in bottom_matches if b["값"] != "❌ 없음"])
 
-                top_values.extend([t["값"] for t in top if t["값"] != "❌ 없음"])
-                bottom_values.extend([b["값"] for b in bottom if b["값"] != "❌ 없음"])
-
-            top_counter = Counter(top_values)
-            bottom_counter = Counter(bottom_values)
-
-            result[f"{size}줄 블럭 Top3 요약"] = {
-                "Top3상단": top_counter.most_common(3),
-                "Top3하단": bottom_counter.most_common(3)
+            result[f"{size}줄 블럭 Top4 요약"] = {
+                "Top4상단": Counter(top_all).most_common(4),
+                "Top4하단": Counter(bottom_all).most_common(4)
             }
 
         return jsonify(result)
