@@ -110,8 +110,8 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-@app.route("/predict_top3_summary")
-def predict_top3_summary():
+@app.route("/predict_top4_summary")
+def predict_top4_summary():
     try:
         response = supabase.table(SUPABASE_TABLE) \
             .select("*") \
@@ -124,31 +124,25 @@ def predict_top3_summary():
         all_data = [convert(d) for d in raw]
 
         result = {}
+        transform_modes = {
+            "완전대칭": flip_full,
+            "시작점대칭": flip_start,
+            "홀짝대칭": flip_odd_even
+        }
 
         for size in [3, 4]:
             recent_block = all_data[:size]
-            transform_modes = {
-                "flip_full": flip_full,
-                "flip_start": flip_start,
-                "flip_odd_even": flip_odd_even
-            }
-
-            top_values = []
-            bottom_values = []
-
-            for fn in transform_modes.values():
+            for mode_name, fn in transform_modes.items():
                 flow = fn(recent_block)
                 top, bottom = find_all_matches(flow, all_data)
-                top_values += [t["값"] for t in top if t["값"] != "❌ 없음"]
-                bottom_values += [b["값"] for b in bottom if b["값"] != "❌ 없음"]
 
-            top_counter = Counter(top_values)
-            bottom_counter = Counter(bottom_values)
+                top_counter = Counter([t["값"] for t in top if t["값"] != "❌ 없음"])
+                bottom_counter = Counter([b["값"] for b in bottom if b["값"] != "❌ 없음"])
 
-            result[f"{size}줄 블럭 Top4 요약"] = {
-                "Top4상단": top_counter.most_common(4),
-                "Top4하단": bottom_counter.most_common(4)
-            }
+                result[f"{size}줄 블럭 - {mode_name}"] = {
+                    "Top4상단": top_counter.most_common(4),
+                    "Top4하단": bottom_counter.most_common(4)
+                }
 
         return jsonify(result)
 
