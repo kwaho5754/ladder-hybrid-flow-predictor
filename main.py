@@ -125,6 +125,7 @@ def predict_top4_summary():
 
         result = {}
         transform_modes = {
+            "원본": lambda x: x,
             "완전대칭": flip_full,
             "시작점대칭": flip_start,
             "홀짝대칭": flip_odd_even
