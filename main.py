@@ -140,9 +140,13 @@ def predict_top4_summary():
                 top_counter = Counter([t["값"] for t in top if t["값"] != "❌ 없음"])
                 bottom_counter = Counter([b["값"] for b in bottom if b["값"] != "❌ 없음"])
 
+                # 합산 카운터
+                combined_counter = top_counter + bottom_counter
+
                 result[f"{size}줄 블럭 - {mode_name}"] = {
                     "Top4상단": top_counter.most_common(4),
-                    "Top4하단": bottom_counter.most_common(4)
+                    "Top4하단": bottom_counter.most_common(4),
+                    "Top4합산": combined_counter.most_common(4)
                 }
 
         return jsonify(result)
